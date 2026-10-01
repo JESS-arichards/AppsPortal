@@ -26,7 +26,7 @@ export interface EntraClaims {
 export async function verifyEntraIdToken(token: string): Promise<EntraClaims | null> {
   if (!token) return null;
 
-  // In production with tenant configured, verify with Microsoft Entra JWKS
+  // With tenant configured, verify with Microsoft Entra JWKS
   if (config.entraTenantId && config.entraClientId) {
     try {
       const JWKS = getJwks();
@@ -40,9 +40,18 @@ export async function verifyEntraIdToken(token: string): Promise<EntraClaims | n
     } catch (err) {
       console.warn('[Entra] JWKS verification failed:', (err as Error).message);
     }
+    // Tenant/client configured but verification failed or JWKS unavailable: fail closed.
+    // Never fall through to the unsigned-token fallback below when Entra is configured.
+    return null;
   }
 
-  // Graceful fallback for mock tokens or dev testing
+  // In production, Entra must always be configured; reject outright rather than
+  // ever trusting an unsigned/decoded token.
+  if (config.isProduction) {
+    return null;
+  }
+
+  // Graceful fallback for mock tokens, local dev/testing only (no tenant configured, non-production)
   try {
     const claims = jose.decodeJwt(token) as unknown as EntraClaims;
     if (claims && (claims.sub || claims.oid || claims.email || claims.preferred_username)) {

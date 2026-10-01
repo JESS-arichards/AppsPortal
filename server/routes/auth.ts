@@ -34,19 +34,35 @@ authRouter.post('/users/sync', async (req: Request, res: Response) => {
 
     const isStudent = (claims.department && claims.department.toLowerCase().includes('student')) || false;
 
+    // 8-hour signed session cookie so the browser stays authenticated after this sync
+    // (the client never resends the Entra bearer token on later requests).
+    const eightHoursMs = 8 * 60 * 60 * 1000;
+    const setSessionCookie = (userType: 'Staff' | 'Student', id: string) => {
+      const sessionToken = signPayload({ userType, id, email, exp: Date.now() + eightHoursMs });
+      res.cookie('portal_session', sessionToken, {
+        httpOnly: true,
+        secure: config.isProduction,
+        sameSite: 'lax',
+        maxAge: eightHoursMs,
+      });
+    };
+
     if (isStudent) {
+      const existingStudent = await repository.getStudentByEmail(email);
       const student = await repository.upsertStudentUser({
-        id: claims.oid || claims.sub || 'student-' + email,
+        id: existingStudent?.id || claims.oid || claims.sub || 'student-' + email,
         email,
         displayName: claims.name || email,
         forename: claims.given_name,
         surname: claims.family_name,
         department: claims.department,
       });
+      setSessionCookie('Student', student.id);
       res.json({ ...student, userType: 'Student' });
     } else {
+      const existingStaff = await repository.getStaffByEmail(email);
       const staff = await repository.upsertStaffUser({
-        id: claims.oid || claims.sub || 'staff-' + email,
+        id: existingStaff?.id || claims.oid || claims.sub || 'staff-' + email,
         email,
         displayName: claims.name || email,
         forename: claims.given_name,
@@ -54,6 +70,7 @@ authRouter.post('/users/sync', async (req: Request, res: Response) => {
         jobTitle: claims.jobTitle,
         department: claims.department,
       });
+      setSessionCookie('Staff', staff.id);
       res.json({ ...staff, userType: 'Staff' });
     }
   } catch (err: any) {
@@ -139,7 +156,8 @@ authRouter.post('/parent/verify-code', async (req: Request, res: Response) => {
     // Create 8-hour session cookie
     const eightHoursMs = 8 * 60 * 60 * 1000;
     const sessionToken = signPayload({
-      parentId: parent.id,
+      userType: 'Parent' as const,
+      id: parent.id,
       email: parent.email,
       exp: Date.now() + eightHoursMs,
     });

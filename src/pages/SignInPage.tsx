@@ -318,43 +318,46 @@ export const SignInPage: React.FC = () => {
               </a>
             </div>
 
-            {/* Dev / Test Role Switcher (Convenience for testing without external Entra) */}
-            <div className="dev-test-bar">
-              <div className="dev-test-title">Local Testing Shortcuts:</div>
-              <div className="dev-buttons">
-                <button
-                  type="button"
-                  className="btn-dev"
-                  onClick={() => devLoginAs({ displayName: 'System Administrator', email: 'admin@jess.sch.ae', userType: 'Staff' })}
-                >
-                  Admin Staff
-                </button>
-                <button
-                  type="button"
-                  className="btn-dev"
-                  onClick={() => devLoginAs({ displayName: 'Sarah Jenkins', email: 'teacher@jess.sch.ae', userType: 'Staff' })}
-                >
-                  Teacher Staff
-                </button>
-                <button
-                  type="button"
-                  className="btn-dev"
-                  onClick={() => devLoginAs({ displayName: 'Alex Smith', email: 'alex.smith@student.jess.sch.ae', userType: 'Student' })}
-                >
-                  Student
-                </button>
-                <button
-                  type="button"
-                  className="btn-dev"
-                  onClick={() => {
-                    setParentFormExpanded(true);
-                    setParentEmail('parent@example.com');
-                  }}
-                >
-                  Set Parent Email
-                </button>
+            {/* Dev / Test Role Switcher (Convenience for testing without external Entra). */}
+            {/* Only rendered in local dev builds (import.meta.env.DEV) so it never ships to production. */}
+            {import.meta.env.DEV && (
+              <div className="dev-test-bar">
+                <div className="dev-test-title">Local Testing Shortcuts:</div>
+                <div className="dev-buttons">
+                  <button
+                    type="button"
+                    className="btn-dev"
+                    onClick={() => devLoginAs({ displayName: 'System Administrator', email: 'admin@jess.sch.ae', userType: 'Staff' })}
+                  >
+                    Admin Staff
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-dev"
+                    onClick={() => devLoginAs({ displayName: 'Sarah Jenkins', email: 'teacher@jess.sch.ae', userType: 'Staff' })}
+                  >
+                    Teacher Staff
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-dev"
+                    onClick={() => devLoginAs({ displayName: 'Alex Smith', email: 'alex.smith@student.jess.sch.ae', userType: 'Student' })}
+                  >
+                    Student
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-dev"
+                    onClick={() => {
+                      setParentFormExpanded(true);
+                      setParentEmail('parent@example.com');
+                    }}
+                  >
+                    Set Parent Email
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </section>
       </main>

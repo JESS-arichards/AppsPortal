@@ -188,6 +188,10 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
   const [bulkCsv, setBulkCsv] = useState('');
   const [bulkResults, setBulkResults] = useState<any | null>(null);
 
+  // Collapsible section state - both sections start collapsed
+  const [addParentOpen, setAddParentOpen] = useState(false);
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
+
   // User Editor Dialog state
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState<any>({});
@@ -308,11 +312,20 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
         </div>
       )}
 
-      {/* Add Parent and Bulk Upload Section */}
-      <div className="admin-grid-two-cols">
+      {/* Add Parent and Bulk Upload Section - stacked, equal width, collapsible */}
+      <div className="admin-stacked-sections">
         {/* Add Single Parent Form */}
-        <section className="card">
-          <h2 className="card-section-title">Add Parent Account</h2>
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={addParentOpen}
+            onClick={() => setAddParentOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Add Parent Account</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{addParentOpen ? '▾' : '▸'}</span>
+          </button>
+          {addParentOpen && (
           <form onSubmit={handleAddParent}>
             <div className="form-group">
               <label className="form-label">Full Display Name *</label>
@@ -375,11 +388,22 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
               Add parent
             </button>
           </form>
+          )}
         </section>
 
         {/* Bulk Upload Parents */}
-        <section className="card">
-          <h2 className="card-section-title">Bulk Upload Parents</h2>
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={bulkUploadOpen}
+            onClick={() => setBulkUploadOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Bulk Upload Parents</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{bulkUploadOpen ? '▾' : '▸'}</span>
+          </button>
+          {bulkUploadOpen && (
+          <>
           <p className="card-hint">
             Upload CSV/TXT (max 500 lines). Format: <code>displayName, email, forename, surname, studentEmail</code>
           </p>
@@ -437,6 +461,8 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
             <div className="bulk-summary-box" style={{ marginTop: '12px' }}>
               <strong>Results:</strong> {bulkResults.successful} succeeded, {bulkResults.failed} failed.
             </div>
+          )}
+          </>
           )}
         </section>
       </div>
@@ -861,6 +887,10 @@ const AdminClassesSection: React.FC = () => {
   const [campus, setCampus] = useState<'ARP' | 'JJ' | 'ARS'>('ARP');
   const [name, setName] = useState('');
 
+  // Collapsible section state - both sections start collapsed
+  const [addClassOpen, setAddClassOpen] = useState(false);
+  const [registeredClassesOpen, setRegisteredClassesOpen] = useState(false);
+
   const loadClasses = useCallback(async () => {
     try {
       const res = await api.get<{ classes: ClassEntity[] }>('/api/admin/classes');
@@ -908,9 +938,18 @@ const AdminClassesSection: React.FC = () => {
       <LiveRegion loading={loading} error={error} />
       {success && <div className="status-box success-box">{success}</div>}
 
-      <div className="admin-grid-two-cols">
-        <section className="card">
-          <h2 className="card-section-title">Add / Update Class</h2>
+      <div className="admin-stacked-sections">
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={addClassOpen}
+            onClick={() => setAddClassOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Add / Update Class</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{addClassOpen ? '▾' : '▸'}</span>
+          </button>
+          {addClassOpen && (
           <form onSubmit={handleAddClass}>
             <div className="form-group">
               <label className="form-label">Class Code (e.g. 10-CSC-1) *</label>
@@ -952,11 +991,21 @@ const AdminClassesSection: React.FC = () => {
               Add / update class
             </button>
           </form>
+          )}
         </section>
 
-        <section className="card">
-          <h2 className="card-section-title">Registered Classes ({classes.length})</h2>
-          <div className="table-responsive">
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={registeredClassesOpen}
+            onClick={() => setRegisteredClassesOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Registered Classes ({classes.length})</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{registeredClassesOpen ? '▾' : '▸'}</span>
+          </button>
+          {registeredClassesOpen && (
+          <div className="table-responsive" style={{ marginTop: '1.25rem' }}>
             <table className="portal-table">
               <thead>
                 <tr>
@@ -982,6 +1031,7 @@ const AdminClassesSection: React.FC = () => {
               </tbody>
             </table>
           </div>
+          )}
         </section>
       </div>
     </div>
@@ -996,6 +1046,8 @@ const AdminPeriodsSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [addPeriodOpen, setAddPeriodOpen] = useState(false);
+  const [configuredPeriodsOpen, setConfiguredPeriodsOpen] = useState(false);
 
   const [campus, setCampus] = useState<'ARP' | 'JJ' | 'ARS'>('ARP');
   const [weekday, setWeekday] = useState('1');
@@ -1066,9 +1118,18 @@ const AdminPeriodsSection: React.FC = () => {
       <LiveRegion loading={loading} error={error} />
       {success && <div className="status-box success-box">{success}</div>}
 
-      <div className="admin-grid-two-cols">
-        <section className="card">
-          <h2 className="card-section-title">Add Lesson Period</h2>
+      <div className="admin-stacked-sections">
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={addPeriodOpen}
+            onClick={() => setAddPeriodOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Add Lesson Period</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{addPeriodOpen ? '▾' : '▸'}</span>
+          </button>
+          {addPeriodOpen && (
           <form onSubmit={handleAddPeriod}>
             <div className="form-group">
               <label className="form-label">Campus *</label>
@@ -1147,11 +1208,21 @@ const AdminPeriodsSection: React.FC = () => {
               Add period
             </button>
           </form>
+          )}
         </section>
 
-        <section className="card">
-          <h2 className="card-section-title">Configured Timetable Periods</h2>
-          <div className="table-responsive">
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={configuredPeriodsOpen}
+            onClick={() => setConfiguredPeriodsOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Configured Timetable Periods</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{configuredPeriodsOpen ? '▾' : '▸'}</span>
+          </button>
+          {configuredPeriodsOpen && (
+          <div className="table-responsive" style={{ marginTop: '1.25rem' }}>
             <table className="portal-table">
               <thead>
                 <tr>
@@ -1181,6 +1252,7 @@ const AdminPeriodsSection: React.FC = () => {
               </tbody>
             </table>
           </div>
+          )}
         </section>
       </div>
     </div>
@@ -1200,6 +1272,8 @@ const AdminParentLinksSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [createLinkOpen, setCreateLinkOpen] = useState(false);
+  const [pendingLinksOpen, setPendingLinksOpen] = useState(false);
 
   const [selectedParentId, setSelectedParentId] = useState('');
   const [linkType, setLinkType] = useState<'selector' | 'email'>('selector');
@@ -1285,9 +1359,18 @@ const AdminParentLinksSection: React.FC = () => {
       <LiveRegion loading={loading} error={error} />
       {success && <div className="status-box success-box">{success}</div>}
 
-      <div className="admin-grid-two-cols">
-        <section className="card">
-          <h2 className="card-section-title">Create Parent-Student Link</h2>
+      <div className="admin-stacked-sections">
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={createLinkOpen}
+            onClick={() => setCreateLinkOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Create Parent-Student Link</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{createLinkOpen ? '▾' : '▸'}</span>
+          </button>
+          {createLinkOpen && (
           <form onSubmit={handleCreateLink}>
             <div className="form-group">
               <label className="form-label">Select Parent *</label>
@@ -1361,10 +1444,21 @@ const AdminParentLinksSection: React.FC = () => {
               Link accounts
             </button>
           </form>
+          )}
         </section>
 
-        <section className="card">
-          <h2 className="card-section-title">Pending Links (Order-Independent)</h2>
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={pendingLinksOpen}
+            onClick={() => setPendingLinksOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Pending Links (Order-Independent)</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{pendingLinksOpen ? '▾' : '▸'}</span>
+          </button>
+          {pendingLinksOpen && (
+          <>
           <p className="card-hint">
             These links were created before the student first signed in with Microsoft Entra ID. They automatically activate upon the student's first sign-in.
           </p>
@@ -1395,6 +1489,8 @@ const AdminParentLinksSection: React.FC = () => {
             </div>
           ) : (
             <p className="empty-text">No pending parent links in queue.</p>
+          )}
+          </>
           )}
         </section>
       </div>
@@ -1452,6 +1548,8 @@ const AdminParkingSection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [releaseSpaceOpen, setReleaseSpaceOpen] = useState(false);
+  const [allReleasesOpen, setAllReleasesOpen] = useState(false);
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const [selectedStaffId, setSelectedStaffId] = useState('');
@@ -1527,9 +1625,18 @@ const AdminParkingSection: React.FC = () => {
       {success && <div className="status-box success-box">{success}</div>}
       {warning && <div className="status-box warning-box">{warning}</div>}
 
-      <div className="admin-grid-two-cols">
-        <section className="card">
-          <h2 className="card-section-title">Release Space on Behalf of Staff</h2>
+      <div className="admin-stacked-sections">
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={releaseSpaceOpen}
+            onClick={() => setReleaseSpaceOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Release Space on Behalf of Staff</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{releaseSpaceOpen ? '▾' : '▸'}</span>
+          </button>
+          {releaseSpaceOpen && (
           <form onSubmit={handleAdminRelease}>
             <div className="form-group">
               <label className="form-label">Staff Space Owner *</label>
@@ -1576,11 +1683,21 @@ const AdminParkingSection: React.FC = () => {
               Release space
             </button>
           </form>
+          )}
         </section>
 
-        <section className="card">
-          <h2 className="card-section-title">All Parking Space Releases ({releases.length})</h2>
-          <div className="table-responsive">
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={allReleasesOpen}
+            onClick={() => setAllReleasesOpen(o => !o)}
+          >
+            <h2 className="card-section-title">All Parking Space Releases ({releases.length})</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{allReleasesOpen ? '▾' : '▸'}</span>
+          </button>
+          {allReleasesOpen && (
+          <div className="table-responsive" style={{ marginTop: '1.25rem' }}>
             <table className="portal-table">
               <thead>
                 <tr>
@@ -1616,6 +1733,7 @@ const AdminParkingSection: React.FC = () => {
               </tbody>
             </table>
           </div>
+          )}
         </section>
       </div>
     </div>
@@ -1984,6 +2102,9 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [colorPaletteOpen, setColorPaletteOpen] = useState(false);
+  const [homeContentOpen, setHomeContentOpen] = useState(false);
+  const [loginContentOpen, setLoginContentOpen] = useState(false);
 
   const loadContent = useCallback(async () => {
     try {
@@ -2133,9 +2254,19 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
       <LiveRegion loading={loading} error={error} />
       {success && <div className="status-box success-box">{success}</div>}
 
-      {/* 1. Branding Form */}
-      <section className="card" style={{ marginBottom: '24px' }}>
-        <h2 className="card-section-title">Color Palette &amp; Logos</h2>
+      <div className="admin-stacked-sections">
+        {/* 1. Branding Form */}
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={colorPaletteOpen}
+            onClick={() => setColorPaletteOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Color Palette &amp; Logos</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{colorPaletteOpen ? '▾' : '▸'}</span>
+          </button>
+          {colorPaletteOpen && (
         <form onSubmit={handleSaveBranding}>
           <div className="form-row-three">
             <div className="form-group">
@@ -2326,12 +2457,22 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
             </button>
           </div>
         </form>
-      </section>
+          )}
+        </section>
 
-      {/* 2. Home Page Editor */}
-      {homeData && (
-        <section className="card" style={{ marginBottom: '24px' }}>
-          <h2 className="card-section-title">Home Page Content Editor</h2>
+        {/* 2. Home Page Editor */}
+        {homeData && (
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={homeContentOpen}
+            onClick={() => setHomeContentOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Home Page Content Editor</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{homeContentOpen ? '▾' : '▸'}</span>
+          </button>
+          {homeContentOpen && (
           <form onSubmit={handleSaveHome}>
             <div className="form-row-two">
               <div className="form-group">
@@ -2440,13 +2581,23 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
               Save home page
             </button>
           </form>
+          )}
         </section>
-      )}
+        )}
 
-      {/* 3. Sign-In Page Editor */}
-      {loginData && (
-        <section className="card">
-          <h2 className="card-section-title">Sign-In Page Content Editor</h2>
+        {/* 3. Sign-In Page Editor */}
+        {loginData && (
+        <section className="card collapsible-card">
+          <button
+            type="button"
+            className="collapsible-header"
+            aria-expanded={loginContentOpen}
+            onClick={() => setLoginContentOpen(o => !o)}
+          >
+            <h2 className="card-section-title">Sign-In Page Content Editor</h2>
+            <span className="collapsible-chevron" aria-hidden="true">{loginContentOpen ? '▾' : '▸'}</span>
+          </button>
+          {loginContentOpen && (
           <form onSubmit={handleSaveLogin}>
             <div className="form-row-two">
               <div className="form-group">
@@ -2514,8 +2665,10 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
               Save sign-in page
             </button>
           </form>
+          )}
         </section>
-      )}
+        )}
+      </div>
     </div>
   );
 };

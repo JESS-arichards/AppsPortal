@@ -3,6 +3,7 @@ import { repository } from '../db/repository.js';
 import { verifySignedPayload } from '../services/crypto.js';
 import { verifyEntraIdToken } from '../services/graph.js';
 import * as Types from '../db/types.js';
+import { config } from '../config.js';
 
 export interface AuthenticatedUser {
   id: string;
@@ -104,19 +105,26 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     }
   }
 
-  // 2. Check signed parent session cookie
+  // 2. Check signed session cookie (set by Entra sync for Staff/Student, or parent code verification)
   if (!user && req.cookies && req.cookies.portal_session) {
-    const parentSession = verifySignedPayload<{ parentId: string; email: string; exp: number }>(req.cookies.portal_session);
-    if (parentSession && parentSession.exp > Date.now()) {
-      const parent = await repository.getParentById(parentSession.parentId);
-      if (parent) {
-        user = { ...parent, userType: 'Parent' };
+    const session = verifySignedPayload<{ userType: 'Staff' | 'Student' | 'Parent'; id: string; email: string; exp: number }>(req.cookies.portal_session);
+    if (session && session.exp > Date.now()) {
+      if (session.userType === 'Parent') {
+        const parent = await repository.getParentById(session.id);
+        if (parent) user = { ...parent, userType: 'Parent' };
+      } else if (session.userType === 'Staff') {
+        const staff = await repository.getStaffById(session.id);
+        if (staff) user = { ...staff, userType: 'Staff' };
+      } else if (session.userType === 'Student') {
+        const student = await repository.getStudentById(session.id);
+        if (student) user = { ...student, userType: 'Student' };
       }
     }
   }
 
-  // 3. Fallback: Local dev convenience header if provided
-  if (!user && req.headers['x-user-id']) {
+  // 3. Fallback: Local dev convenience header, only available outside production so it can
+  // never be used to bypass authentication on a deployed environment.
+  if (!user && !config.isProduction && req.headers['x-user-id']) {
     const userId = req.headers['x-user-id'] as string;
     const staff = await repository.getStaffById(userId);
     if (staff) user = { ...staff, userType: 'Staff' };
