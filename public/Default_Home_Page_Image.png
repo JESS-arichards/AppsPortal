@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#002B49;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a4a75;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="600" fill="url(#grad)"/>
+  <circle cx="600" cy="300" r="160" fill="#BA9B37" opacity="0.2"/>
+  <text x="600" y="290" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="42" fill="#FFFFFF">JESS DUBAI</text>
+  <text x="600" y="340" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="normal" font-size="24" fill="#BA9B37">Arabian Ranches &amp; Jumeirah Campuses</text>
+</svg>
