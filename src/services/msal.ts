@@ -53,14 +53,15 @@ export async function loginWithEntraRedirect(): Promise<void> {
   await instance.loginRedirect(loginRequest);
 }
 
-export async function handleMsalRedirect(): Promise<string | null> {
+export async function handleMsalRedirect(): Promise<{ idToken: string; accessToken: string | null } | null> {
   const instance = getMsalInstance();
   if (!instance) return null;
 
   await instance.initialize();
   const response = await instance.handleRedirectPromise();
   if (response && response.idToken) {
-    return response.idToken;
+    // accessToken is issued for Microsoft Graph because loginRequest asks for User.Read
+    return { idToken: response.idToken, accessToken: response.accessToken || null };
   }
   return null;
 }

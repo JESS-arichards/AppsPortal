@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { repository } from '../db/repository.js';
 import { hashCode, generateSixDigitCode, signPayload } from '../services/crypto.js';
-import { verifyEntraIdToken, sendParentLoginCodeEmail } from '../services/graph.js';
+import { verifyEntraIdToken, sendParentLoginCodeEmail, fetchEntraProfile, parkingSpaceFromPostalCode, EntraProfile } from '../services/graph.js';
 import { requireAuth } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { applyInitialAdmin } from '../services/adminBootstrap.js';
@@ -33,7 +33,23 @@ authRouter.post('/users/sync', async (req: Request, res: Response) => {
       return;
     }
 
-    const isStudent = (claims.department && claims.department.toLowerCase().includes('student')) || false;
+    // Optional delegated Graph token (User.Read) used to read the user's full Entra profile.
+    // The profile is only trusted if it belongs to the same user as the verified ID token.
+    const graphAccessToken = typeof req.body?.graphAccessToken === 'string' ? req.body.graphAccessToken : '';
+    let profile: EntraProfile | null = null;
+    if (graphAccessToken) {
+      const existingPicture = (await repository.getStaffByEmail(email))?.profilePicture ?? (await repository.getStudentByEmail(email))?.profilePicture;
+      const fetched = await fetchEntraProfile(graphAccessToken, !existingPicture);
+      const profileEmail = (fetched?.mail || fetched?.userPrincipalName || '').toLowerCase();
+      const sameUser = fetched && (claims.oid ? fetched.id === claims.oid : profileEmail === email.toLowerCase());
+      if (fetched && !sameUser) {
+        console.warn(`[Auth] Ignoring Graph profile for ${email}: it does not match the signed-in user.`);
+      }
+      profile = sameUser ? fetched : null;
+    }
+
+    const department = profile ? profile.department ?? null : claims.department;
+    const isStudent = (department && department.toLowerCase().includes('student')) || false;
 
     // 8-hour signed session cookie so the browser stays authenticated after this sync
     // (the client never resends the Entra bearer token on later requests).
@@ -50,14 +66,25 @@ authRouter.post('/users/sync', async (req: Request, res: Response) => {
 
     if (isStudent) {
       const existingStudent = await repository.getStudentByEmail(email);
-      const student = await repository.upsertStudentUser({
+      let student = await repository.upsertStudentUser({
         id: existingStudent?.id || claims.oid || claims.sub || 'student-' + email,
         email,
         displayName: claims.name || email,
         forename: claims.given_name,
         surname: claims.family_name,
-        department: claims.department,
+        department: department || undefined,
       });
+      if (profile) {
+        // Entra is the source of truth: overwrite on every sign-in (including clearing removed values).
+        student = await repository.updateStudentUser(student.id, {
+          displayName: profile.displayName || student.displayName,
+          forename: profile.givenName ?? null,
+          surname: profile.surname ?? null,
+          department: profile.department ?? null,
+          division: profile.employeeOrgData?.division ?? null,
+          ...(profile.photoDataUrl && !student.profilePicture ? { profilePicture: profile.photoDataUrl } : {}),
+        });
+      }
       setSessionCookie('Student', student.id);
       res.json({ ...student, userType: 'Student' });
     } else {
@@ -69,8 +96,22 @@ authRouter.post('/users/sync', async (req: Request, res: Response) => {
         forename: claims.given_name,
         surname: claims.family_name,
         jobTitle: claims.jobTitle,
-        department: claims.department,
+        department: department || undefined,
       });
+      if (profile) {
+        // Entra is the source of truth: overwrite on every sign-in (including clearing removed values).
+        staff = await repository.updateStaffUser(staff.id, {
+          displayName: profile.displayName || staff.displayName,
+          forename: profile.givenName ?? null,
+          surname: profile.surname ?? null,
+          jobTitle: profile.jobTitle ?? null,
+          department: profile.department ?? null,
+          division: profile.employeeOrgData?.division ?? null,
+          parkingSpace: parkingSpaceFromPostalCode(profile.postalCode),
+          misId: profile.employeeId?.trim() || null,
+          ...(profile.photoDataUrl && !staff.profilePicture ? { profilePicture: profile.photoDataUrl } : {}),
+        });
+      }
       staff = await applyInitialAdmin(staff);
       setSessionCookie('Staff', staff.id);
       res.json({ ...staff, userType: 'Staff' });

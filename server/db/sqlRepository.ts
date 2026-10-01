@@ -113,6 +113,7 @@ export class SqlRepository {
       profilePicture: r.profilePicture ?? null,
       parkingSpace: r.parkingSpace ?? null,
       extension: r.extension ?? null,
+      misId: r.misId ?? null,
       createdAt: iso(r.createdAt),
       updatedAt: iso(r.updatedAt),
       roles,
@@ -227,18 +228,18 @@ export class SqlRepository {
     const params = {
       id: u.id, email: u.email, displayName: u.displayName, forename: u.forename ?? null, surname: u.surname ?? null,
       authType: u.authType, jobTitle: u.jobTitle ?? null, division: u.division ?? null, department: u.department ?? null,
-      profilePicture: u.profilePicture ?? null, parkingSpace: u.parkingSpace ?? null, extension: u.extension ?? null,
+      profilePicture: u.profilePicture ?? null, parkingSpace: u.parkingSpace ?? null, extension: u.extension ?? null, misId: u.misId ?? null,
       roles: JSON.stringify(u.roles || []), classes: JSON.stringify(u.classes || []), sections: JSON.stringify(u.adminSections || []),
     };
     await execute(`
       IF EXISTS (SELECT 1 FROM StaffUsers WHERE id = @id)
         UPDATE StaffUsers SET email = @email, displayName = @displayName, forename = @forename, surname = @surname,
           authType = @authType, jobTitle = @jobTitle, division = @division, department = @department,
-          profilePicture = @profilePicture, parkingSpace = @parkingSpace, extension = @extension, updatedAt = SYSUTCDATETIME()
+          profilePicture = @profilePicture, parkingSpace = @parkingSpace, extension = @extension, misId = @misId, updatedAt = SYSUTCDATETIME()
         WHERE id = @id;
       ELSE
-        INSERT INTO StaffUsers (id, email, displayName, forename, surname, authType, jobTitle, division, department, profilePicture, parkingSpace, extension)
-        VALUES (@id, @email, @displayName, @forename, @surname, @authType, @jobTitle, @division, @department, @profilePicture, @parkingSpace, @extension);
+        INSERT INTO StaffUsers (id, email, displayName, forename, surname, authType, jobTitle, division, department, profilePicture, parkingSpace, extension, misId)
+        VALUES (@id, @email, @displayName, @forename, @surname, @authType, @jobTitle, @division, @department, @profilePicture, @parkingSpace, @extension, @misId);
 
       DELETE FROM StaffUserRoles WHERE staffUserId = @id;
       INSERT INTO StaffUserRoles (staffUserId, [role]) SELECT DISTINCT @id, value FROM OPENJSON(@roles);
@@ -320,6 +321,7 @@ export class SqlRepository {
       profilePicture: userData.profilePicture ?? existing?.profilePicture ?? null,
       parkingSpace: userData.parkingSpace ?? existing?.parkingSpace ?? null,
       extension: userData.extension ?? existing?.extension ?? null,
+      misId: userData.misId ?? existing?.misId ?? null,
       roles: userData.roles ?? roles,
       classes: userData.classes ?? existing?.classes ?? [],
       adminSections: userData.adminSections ?? existing?.adminSections ?? [],

@@ -677,7 +677,7 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
 
                   <div className="form-row-two">
                     <div className="form-group">
-                      <label className="form-label">Parking Space (0-999)</label>
+                      <label className="form-label">Parking Space (0-999, synced from Entra postal code)</label>
                       <input
                         type="number"
                         min={0}
@@ -699,6 +699,11 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
                         onChange={e => setEditForm({ ...editForm, extension: e.target.value ? parseInt(e.target.value, 10) : null })}
                       />
                     </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">MIS ID (synced from Entra employee ID)</label>
+                    <input type="text" className="form-control" value={editForm.misId ?? ''} readOnly disabled />
                   </div>
 
                   {/* Staff Roles (Full Admin only) */}

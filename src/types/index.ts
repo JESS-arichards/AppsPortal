@@ -11,6 +11,7 @@ export interface User {
   adminSections?: string[];
   parkingSpace?: number | null;
   extension?: number | null;
+  misId?: string | null;
   department?: string | null;
   division?: string | null;
   jobTitle?: string | null;

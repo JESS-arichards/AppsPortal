@@ -11,6 +11,7 @@ export interface StaffUser {
   profilePicture?: string | null;
   parkingSpace?: number | null;
   extension?: number | null;
+  misId?: string | null;
   createdAt?: string;
   updatedAt?: string;
   roles?: string[]; // 'Admin' | 'Staff' | 'Onboarding' | 'Oasis'

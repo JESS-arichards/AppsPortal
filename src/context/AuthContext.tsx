@@ -57,12 +57,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const idToken = await handleMsalRedirect();
-        if (idToken) {
-          // Sync with backend using the Entra ID token
+        const tokens = await handleMsalRedirect();
+        if (tokens) {
+          // The Graph access token lets the server read the Entra profile (parking space, MIS ID, job title, etc.)
           await fetch('/api/auth/users/sync', {
             method: 'POST',
-            headers: { Authorization: `Bearer ${idToken}` },
+            headers: { Authorization: `Bearer ${tokens.idToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ graphAccessToken: tokens.accessToken || undefined }),
           });
         }
       } catch (err) {

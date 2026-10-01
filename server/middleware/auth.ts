@@ -19,6 +19,7 @@ export interface AuthenticatedUser {
   adminSections?: string[];
   parkingSpace?: number | null;
   extension?: number | null;
+  misId?: string | null;
   department?: string | null;
   division?: string | null;
   jobTitle?: string | null;

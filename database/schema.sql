@@ -35,10 +35,16 @@ BEGIN
         profilePicture NVARCHAR(MAX) NULL,
         parkingSpace INT NULL,
         extension INT NULL,
+        misId NVARCHAR(64) NULL, -- Entra employeeId
         createdAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
         updatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
     );
 END;
+GO
+
+-- Columns added after the initial release (applied to existing databases)
+IF COL_LENGTH('StaffUsers', 'misId') IS NULL
+    ALTER TABLE StaffUsers ADD misId NVARCHAR(64) NULL;
 GO
 
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'StudentUsers')

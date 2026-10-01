@@ -170,6 +170,11 @@ export const ProfilePage: React.FC = () => {
                 </div>
 
                 <div className="detail-row">
+                  <dt>MIS ID</dt>
+                  <dd>{user.misId || 'Not assigned'}</dd>
+                </div>
+
+                <div className="detail-row">
                   <dt>Staff Roles</dt>
                   <dd>
                     {user.roles && user.roles.length > 0

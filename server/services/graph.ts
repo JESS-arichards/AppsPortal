@@ -64,6 +64,59 @@ export async function verifyEntraIdToken(token: string): Promise<EntraClaims | n
   return null;
 }
 
+export interface EntraProfile {
+  id: string;
+  displayName?: string | null;
+  givenName?: string | null;
+  surname?: string | null;
+  mail?: string | null;
+  userPrincipalName?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  postalCode?: string | null;
+  employeeId?: string | null;
+  employeeOrgData?: { division?: string | null; costCenter?: string | null } | null;
+  photoDataUrl?: string | null;
+}
+
+const PROFILE_FIELDS = 'id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,postalCode,employeeId,employeeOrgData';
+
+/**
+ * Reads the signed-in user's profile from Microsoft Graph using their delegated (User.Read) access token.
+ * Returns null on any failure so sign-in still succeeds with ID token claims only.
+ */
+export async function fetchEntraProfile(graphAccessToken: string, includePhoto: boolean): Promise<EntraProfile | null> {
+  try {
+    const headers = { Authorization: `Bearer ${graphAccessToken}` };
+    const res = await fetch(`https://graph.microsoft.com/v1.0/me?$select=${PROFILE_FIELDS}`, { headers });
+    if (!res.ok) {
+      console.warn('[Graph] Profile lookup failed:', res.status, await res.text());
+      return null;
+    }
+    const profile = (await res.json()) as EntraProfile;
+
+    if (includePhoto) {
+      const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photos/96x96/$value', { headers });
+      if (photoRes.ok) {
+        const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
+        const bytes = Buffer.from(await photoRes.arrayBuffer());
+        profile.photoDataUrl = `data:${contentType};base64,${bytes.toString('base64')}`;
+      }
+    }
+    return profile;
+  } catch (err) {
+    console.warn('[Graph] Profile lookup error:', (err as Error).message);
+    return null;
+  }
+}
+
+/** Entra postalCode holds the staff parking space; anything missing or not 0-999 means "no space" (999). */
+export function parkingSpaceFromPostalCode(postalCode: string | null | undefined): number {
+  const value = (postalCode || '').trim();
+  if (!/^\d{1,3}$/.test(value)) return 999;
+  return parseInt(value, 10);
+}
+
 export async function sendParentLoginCodeEmail(toEmail: string, code: string): Promise<boolean> {
   console.log(`[Email Service] Verification code for ${toEmail}: [${code}] (Valid for 10 minutes)`);
 

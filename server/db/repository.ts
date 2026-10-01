@@ -72,6 +72,7 @@ export class MemoryRepository {
       profilePicture: userData.profilePicture ?? existing?.profilePicture ?? null,
       parkingSpace: userData.parkingSpace ?? existing?.parkingSpace ?? null,
       extension: userData.extension ?? existing?.extension ?? null,
+      misId: userData.misId ?? existing?.misId ?? null,
       roles: userData.roles ?? roles,
       classes: userData.classes ?? existing?.classes ?? [],
       adminSections: userData.adminSections ?? existing?.adminSections ?? [],
