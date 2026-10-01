@@ -56,7 +56,7 @@ export class MemoryStore {
     id: 1,
     welcomeLabel: 'JESS Dubai',
     welcomeHeadline: 'Welcome to the School Community Portal',
-    valuesJson: JSON.stringify(['Empowering Students', 'Excellence in Teaching', 'Community Partnership', 'Integrity & Care']),
+    valuesJson: JSON.stringify(['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity']),
     signInHeading: 'Sign in to JESS Portal',
     signInIntro: 'Choose your login method below to access school services.',
     staffChoiceTitle: 'Staff & Students',

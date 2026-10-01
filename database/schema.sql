@@ -343,7 +343,7 @@ BEGIN
         id INT PRIMARY KEY DEFAULT 1,
         welcomeLabel NVARCHAR(120) NOT NULL DEFAULT 'JESS Dubai',
         welcomeHeadline NVARCHAR(200) NOT NULL DEFAULT 'Welcome to the School Community Portal',
-        valuesJson NVARCHAR(MAX) NOT NULL DEFAULT '["Empowering Students","Excellence in Teaching","Community Partnership","Integrity & Care"]',
+        valuesJson NVARCHAR(MAX) NOT NULL DEFAULT '["Commitment","Respect","Excellence","Care","Integrity","Curiosity"]',
         signInHeading NVARCHAR(200) NOT NULL DEFAULT 'Sign in to JESS Portal',
         signInIntro NVARCHAR(1000) NOT NULL DEFAULT 'Choose your login method below to access school services.',
         staffChoiceTitle NVARCHAR(150) NOT NULL DEFAULT 'Staff & Students',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { api, ApiError } from '../services/api';
@@ -14,7 +14,7 @@ export const SignInPage: React.FC = () => {
     id: 1,
     welcomeLabel: 'JESS Dubai',
     welcomeHeadline: 'Welcome to the School Community Portal',
-    valuesJson: JSON.stringify(['Empowering Students', 'Excellence in Teaching', 'Community Partnership', 'Integrity & Care']),
+    valuesJson: JSON.stringify(['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity']),
     signInHeading: 'Sign in to JESS Portal',
     signInIntro: 'Choose your login method below to access school services.',
     staffChoiceTitle: 'Staff & Students',
@@ -40,12 +40,6 @@ export const SignInPage: React.FC = () => {
   const [showNotFoundDialog, setShowNotFoundDialog] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      navigate('/portal');
-    }
-  }, [user, navigate]);
-
-  useEffect(() => {
     api.get<{ content: LoginContent }>('/api/login-content')
       .then(res => {
         if (res.content) setContent(res.content);
@@ -57,7 +51,7 @@ export const SignInPage: React.FC = () => {
   try {
     valuesList = JSON.parse(content.valuesJson);
   } catch {
-    valuesList = ['Empowering Students', 'Excellence in Teaching'];
+    valuesList = ['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity'];
   }
 
   const handleStaffLogin = async () => {
@@ -115,6 +109,10 @@ export const SignInPage: React.FC = () => {
     }
   };
 
+  if (user) {
+    return <Navigate to="/portal" replace />;
+  }
+
   const helpdeskEmail = window.PORTAL_CONFIG?.APP_HELPDESK_EMAIL || 'helpdesk@jess.sch.ae';
   const logoSrc = branding.navLogo || '/Site_Logo.png';
 
@@ -125,7 +123,7 @@ export const SignInPage: React.FC = () => {
       <div className="glass-ambient-sphere sphere-2" aria-hidden="true" />
       <div className="glass-ambient-sphere sphere-3" aria-hidden="true" />
 
-      {/* Top Glass Bar with School Website Link */}
+      {/* Top Glass Bar */}
       <header className="signin-top-bar">
         <div className="signin-top-bar-inner">
           <a
@@ -145,32 +143,13 @@ export const SignInPage: React.FC = () => {
               <span className="school-brand-sub">Community Portal</span>
             </div>
           </a>
-
-          <a
-            href="https://www.jess.sch.ae"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="school-external-link"
-            title="Open JESS Dubai Website in new tab"
-          >
-            <span>School Website</span>
-            <span aria-hidden="true" className="external-icon">↗</span>
-          </a>
         </div>
       </header>
 
       <main className="signin-main-container">
         {/* Left Column: Glass Welcome & Values */}
         <section className="signin-welcome-section glass-panel">
-          <div className="welcome-tag">
-            <span className="welcome-tag-pulse" aria-hidden="true" />
-            <span className="eyebrow">{content.welcomeLabel}</span>
-          </div>
-
           <h1 className="welcome-headline">{content.welcomeHeadline}</h1>
-          <p className="welcome-description">
-            Your unified portal for distance learning, staff parking, attendance tracking, and live school event broadcasts.
-          </p>
 
           <div className="values-list-wrapper">
             <h2 className="values-heading">Our Core Values</h2>
@@ -212,10 +191,7 @@ export const SignInPage: React.FC = () => {
             {/* Option 1: Staff & Students (Microsoft Entra ID) */}
             <div className="auth-choice-box staff-choice-box">
               <div className="choice-text">
-                <div className="choice-title-row">
-                  <h3 className="choice-title">{content.staffChoiceTitle}</h3>
-                  <span className="choice-badge">Microsoft 365</span>
-                </div>
+                <h3 className="choice-title">{content.staffChoiceTitle}</h3>
                 <p className="choice-description">{content.staffChoiceDescription}</p>
               </div>
 
@@ -245,10 +221,7 @@ export const SignInPage: React.FC = () => {
             {/* Option 2: Parents & Guardians (One-time code) */}
             <div className="auth-choice-box parent-choice-box">
               <div className="choice-text">
-                <div className="choice-title-row">
-                  <h3 className="choice-title">{content.parentChoiceTitle}</h3>
-                  <span className="choice-badge choice-badge-parent">Email Passcode</span>
-                </div>
+                <h3 className="choice-title">{content.parentChoiceTitle}</h3>
                 <p className="choice-description">{content.parentChoiceDescription}</p>
               </div>
 

@@ -2472,16 +2472,16 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
               </div>
             </div>
 
-            {/* Values one per line */}
+            {/* Values are displayed in the order entered */}
             <div className="form-group">
-              <label className="form-label">School Core Values (One per line, up to 8)</label>
+              <label className="form-label">Sign-In Page Core Values (one per line, display order; up to 6)</label>
               <textarea
-                rows={4}
+                rows={6}
                 className="form-control"
                 value={valuesArray.join('\n')}
                 onChange={e => {
                   const lines = e.target.value.split('\n').filter(l => l.trim().length > 0);
-                  setValuesArray(lines.slice(0, 8));
+                  setValuesArray(lines.slice(0, 6));
                 }}
               />
             </div>
