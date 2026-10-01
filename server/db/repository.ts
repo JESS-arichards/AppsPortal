@@ -1,7 +1,10 @@
-import { memoryStore, isAzureSqlConnected, getPool } from './index.js';
+import { memoryStore, isAzureSqlConnected } from './index.js';
 import * as Types from './types.js';
+import { SqlRepository } from './sqlRepository.js';
+import { getWeekdaysBetween } from './dates.js';
 
-export class Repository {
+/** In-memory data store used for local development and automated tests. */
+export class MemoryRepository {
   // -------------------------------------------------------------
   // Users & Roles
   // -------------------------------------------------------------
@@ -575,7 +578,7 @@ export class Repository {
 
     if (releaseSpace && staff?.parkingSpace && staff.parkingSpace !== 999) {
       // Calculate weekdays between startDate and endDate
-      const weekdays = this.getWeekdaysBetween(startDate, endDate);
+      const weekdays = getWeekdaysBetween(startDate, endDate);
       if (weekdays.length > 0) {
         const createdReleases = await this.createParkingReleases(staffUserId, staff.parkingSpace, weekdays);
         parkingReleaseIdsStr = createdReleases.map(r => r.id).join(',');
@@ -615,24 +618,6 @@ export class Repository {
 
     memoryStore.absenceRequests.delete(id);
     return true;
-  }
-
-  private getWeekdaysBetween(startStr: string, endStr: string): string[] {
-    const dates: string[] = [];
-    const cur = new Date(startStr);
-    const end = new Date(endStr);
-    const todayStr = new Date().toISOString().slice(0, 10);
-
-    while (cur <= end) {
-      const day = cur.getUTCDay();
-      const isoStr = cur.toISOString().slice(0, 10);
-      // Monday = 1 to Friday = 5, and only future or today
-      if (day >= 1 && day <= 5 && isoStr >= todayStr) {
-        dates.push(isoStr);
-      }
-      cur.setUTCDate(cur.getUTCDate() + 1);
-    }
-    return dates;
   }
 
   // -------------------------------------------------------------
@@ -728,4 +713,21 @@ export class Repository {
   }
 }
 
-export const repository = new Repository();
+export type RepositoryApi = { [K in keyof MemoryRepository]: MemoryRepository[K] };
+
+const memoryRepository = new MemoryRepository();
+// Typed as RepositoryApi so the compiler enforces that SqlRepository implements every method.
+const sqlRepository: RepositoryApi = new SqlRepository();
+
+/**
+ * Routes every call to Azure SQL when a connection is active, otherwise to the
+ * in-memory store. Resolved per call because the connection is established
+ * after this module is first imported.
+ */
+export const repository: RepositoryApi = new Proxy({} as RepositoryApi, {
+  get(_target, prop) {
+    const active: any = isAzureSqlConnected() ? sqlRepository : memoryRepository;
+    const value = active[prop];
+    return typeof value === 'function' ? value.bind(active) : value;
+  },
+});

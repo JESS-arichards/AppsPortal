@@ -106,6 +106,7 @@ async function startServer() {
 if (process.env.NODE_ENV !== 'test') {
   startServer().catch(err => {
     console.error('Failed to start server:', err);
+    process.exit(1);
   });
 }
 

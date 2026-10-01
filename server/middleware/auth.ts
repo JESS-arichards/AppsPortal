@@ -4,6 +4,7 @@ import { verifySignedPayload } from '../services/crypto.js';
 import { verifyEntraIdToken } from '../services/graph.js';
 import * as Types from '../db/types.js';
 import { config } from '../config.js';
+import { applyInitialAdmin } from '../services/adminBootstrap.js';
 
 export interface AuthenticatedUser {
   id: string;
@@ -96,6 +97,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
                 department: claims.department,
               });
             }
+            staff = await applyInitialAdmin(staff);
             user = { ...staff, userType: 'Staff' };
           }
 

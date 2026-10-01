@@ -2,22 +2,19 @@ import fs from 'fs';
 import path from 'path';
 import sql from 'mssql';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { config } from '../server/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function runMigrations() {
-  const connectionString = process.env.SQL_CONNECTION_STRING;
-  if (!connectionString) {
-    console.log('[Migration] No SQL_CONNECTION_STRING provided. Skipping live Azure SQL migration (memory store is initialized automatically).');
+  if (!config.sqlConnection) {
+    console.log('[Migration] No Azure SQL settings found (AZURE_SQL_CONNECTION_STRING or AZURE_SQL_SERVER/DATABASE/USER/PASSWORD). Skipping live migration.');
     return;
   }
 
   console.log('[Migration] Connecting to Azure SQL...');
-  const pool = new sql.ConnectionPool(connectionString);
+  const pool = new sql.ConnectionPool(config.sqlConnection as any);
   await pool.connect();
   console.log('[Migration] Connected to database.');
 

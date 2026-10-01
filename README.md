@@ -136,9 +136,12 @@ npm run db:migrate
 ```
 
 ### Dual-Mode Database Architecture
-To ensure seamless local developer experience and high-availability testing, the database layer (`server/db/index.ts`) incorporates a **Dual-Mode Engine**:
-- **Production Mode (Azure SQL):** When `AZURE_SQL_CONNECTION_STRING` or individual SQL credentials are provided, connection pools are established with resilient retry logic, encrypted TDS channels, and parameterized statements.
-- **Development/Fallback Mode (In-Memory Repository):** When no SQL connection is configured, the application automatically initializes an in-memory repository pre-seeded with staff, student, parent accounts, campus lesson periods, and mock streaming feeds.
+The database layer (`server/db/index.ts`, `server/db/repository.ts`, `server/db/sqlRepository.ts`) runs in one of two modes:
+- **Azure SQL Mode (deployed environments):** When `AZURE_SQL_CONNECTION_STRING` (or `SQL_CONNECTION_STRING`, or the individual `AZURE_SQL_SERVER`/`AZURE_SQL_DATABASE`/`AZURE_SQL_USER`/`AZURE_SQL_PASSWORD` settings) is provided, **all data** (users, roles, classes, lessons, parking, absence, streams, branding, home/login content, impersonation audit) is read from and written to Azure SQL via parameterized queries. On startup the server connects with retry logic and applies `database/schema.sql` (idempotent), so missing tables are created automatically. If SQL is configured but unreachable, the server **fails to start** rather than silently falling back to memory.
+- **In-Memory Mode (local development/tests only):** When no SQL connection is configured, the application uses an in-memory repository pre-seeded with demo staff, student and parent accounts, campus lesson periods and mock streams. Nothing is persisted, and demo accounts never exist in SQL.
+
+### First Administrator
+A new SQL database has no administrators. Set `INITIAL_ADMIN_EMAILS` to one or more staff emails; when those users sign in with Entra they are granted the `Admin` role (stored in `StaffUserRoles`). Roles are never removed by this setting, so it can be cleared once an admin exists.
 
 ---
 
@@ -155,6 +158,7 @@ The following variables must be configured in Azure App Service under **Settings
 | `AZURE_SQL_DATABASE` | Optional | `sqldb-portal` | Azure SQL Database catalog name. | `AZURE_SQL_DATABASE` |
 | `AZURE_SQL_USER` | Optional | `portal_db_user` | Database user login. | `AZURE_SQL_USER` |
 | `AZURE_SQL_PASSWORD` | Optional | `***` | Secure password for database user login. | `AZURE_SQL_PASSWORD` |
+| `INITIAL_ADMIN_EMAILS` | Recommended (first deploy) | `a.richards@jess.sch.ae` | Comma-separated staff emails granted the `Admin` role on Entra sign-in. Needed to create the first administrator in a new database. | `INITIAL_ADMIN_EMAILS` |
 | `SESSION_SECRET` | **Mandatory** | *(Generate a 64-char random hex)* | Key used to compute HMAC-SHA256 signatures for cookies and impersonation tokens. | `SESSION_SECRET` |
 | `ENTRA_CLIENT_ID` | **Mandatory** | `00000000-0000-0000-0000-000000000000` | Application (Client) ID from Microsoft Entra ID App Registration. Exposed safely to client via `/portal-config.js`. | `ENTRA_CLIENT_ID` |
 | `ENTRA_TENANT_ID` | **Mandatory** | `00000000-0000-0000-0000-000000000000` | Directory (Tenant) ID for JESS Dubai in Microsoft Entra. | `ENTRA_TENANT_ID` |

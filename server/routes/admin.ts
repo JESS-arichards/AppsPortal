@@ -41,13 +41,18 @@ adminRouter.put('/staff/:id', requireAdmin('users'), async (req: Request, res: R
       return;
     }
 
-    if (parkingSpace !== undefined && parkingSpace !== null && (parkingSpace < 0 || parkingSpace > 999)) {
-      res.status(400).json({ error: 'Parking space must be between 0 and 999' });
+    const toOptionalInt = (v: unknown): number | null | undefined =>
+      v === undefined ? undefined : v === null || v === '' ? null : Number(v);
+    const parkingSpaceValue = toOptionalInt(parkingSpace);
+    const extensionValue = toOptionalInt(extension);
+
+    if (parkingSpaceValue != null && (!Number.isInteger(parkingSpaceValue) || parkingSpaceValue < 0 || parkingSpaceValue > 999)) {
+      res.status(400).json({ error: 'Parking space must be a whole number between 0 and 999' });
       return;
     }
 
-    if (extension !== undefined && extension !== null && (extension < 0 || extension > 999)) {
-      res.status(400).json({ error: 'Extension must be between 0 and 999' });
+    if (extensionValue != null && (!Number.isInteger(extensionValue) || extensionValue < 0 || extensionValue > 999)) {
+      res.status(400).json({ error: 'Extension must be a whole number between 0 and 999' });
       return;
     }
 
@@ -61,8 +66,8 @@ adminRouter.put('/staff/:id', requireAdmin('users'), async (req: Request, res: R
       jobTitle: jobTitle?.trim() || null,
       division: division?.trim() || null,
       department: department?.trim() || null,
-      parkingSpace: parkingSpace !== undefined ? parkingSpace : undefined,
-      extension: extension !== undefined ? extension : undefined,
+      parkingSpace: parkingSpaceValue,
+      extension: extensionValue,
       classes: Array.isArray(classes) ? classes : undefined,
     };
 

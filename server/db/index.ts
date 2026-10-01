@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import sql from 'mssql';
 import { config } from '../config.js';
 import * as Types from './types.js';
@@ -247,21 +250,63 @@ export class MemoryStore {
 
 export const memoryStore = new MemoryStore();
 
-export async function initDatabase(): Promise<void> {
-  if (config.sqlConnectionString) {
-    try {
-      console.log('[Database] Connecting to Azure SQL Database...');
-      pool = new sql.ConnectionPool(config.sqlConnectionString);
-      await pool.connect();
-      isConnected = true;
-      console.log('[Database] Connected successfully to Azure SQL.');
-    } catch (err) {
-      console.error('[Database] Failed to connect to Azure SQL. Falling back to robust in-memory database:', err);
-      isConnected = false;
-    }
-  } else {
-    console.log('[Database] No SQL_CONNECTION_STRING provided. Running in memory store mode for local development/testing.');
+function locateSchemaFile(): string | null {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(process.cwd(), 'database', 'schema.sql'),
+    path.resolve(here, '..', '..', 'database', 'schema.sql'),
+    path.resolve(here, '..', '..', '..', 'database', 'schema.sql'),
+  ];
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
+
+// schema.sql is fully idempotent (IF NOT EXISTS guards), so it is safe to run on every start.
+async function ensureSchema(activePool: sql.ConnectionPool): Promise<void> {
+  const schemaPath = locateSchemaFile();
+  if (!schemaPath) {
+    console.warn('[Database] database/schema.sql not found; skipping schema verification.');
+    return;
   }
+  const batches = fs.readFileSync(schemaPath, 'utf8').split(/^\s*GO\s*$/im).map(b => b.trim()).filter(Boolean);
+  for (const batch of batches) {
+    await activePool.request().batch(batch);
+  }
+  console.log('[Database] Schema verified against database/schema.sql.');
+}
+
+export async function initDatabase(): Promise<void> {
+  if (!config.sqlConnection) {
+    if (config.isProduction) {
+      console.warn('[Database] WARNING: No Azure SQL settings found (AZURE_SQL_CONNECTION_STRING or AZURE_SQL_SERVER/DATABASE/USER/PASSWORD). Data will NOT be persisted.');
+    } else {
+      console.log('[Database] No SQL connection configured. Running in memory store mode for local development/testing.');
+    }
+    return;
+  }
+
+  const maxAttempts = 5;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`[Database] Connecting to Azure SQL Database (attempt ${attempt}/${maxAttempts})...`);
+      const candidate = new sql.ConnectionPool(config.sqlConnection as any);
+      await candidate.connect();
+      candidate.on('error', err => console.error('[Database] Pool error:', err));
+      await ensureSchema(candidate);
+      pool = candidate;
+      isConnected = true;
+      console.log('[Database] Connected successfully to Azure SQL. All data is persisted to SQL.');
+      return;
+    } catch (err) {
+      lastError = err;
+      console.error(`[Database] Connection attempt ${attempt} failed:`, (err as Error)?.message || err);
+      if (attempt < maxAttempts) await new Promise(r => setTimeout(r, attempt * 2000));
+    }
+  }
+
+  // SQL is configured but unreachable: refuse to start rather than silently writing to
+  // memory and losing data. App Service will restart the process and retry.
+  throw new Error(`Unable to connect to Azure SQL after ${maxAttempts} attempts: ${(lastError as Error)?.message || lastError}`);
 }
 
 export function isAzureSqlConnected(): boolean {

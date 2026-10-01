@@ -4,6 +4,7 @@ import { hashCode, generateSixDigitCode, signPayload } from '../services/crypto.
 import { verifyEntraIdToken, sendParentLoginCodeEmail } from '../services/graph.js';
 import { requireAuth } from '../middleware/auth.js';
 import { config } from '../config.js';
+import { applyInitialAdmin } from '../services/adminBootstrap.js';
 
 export const authRouter = Router();
 
@@ -61,7 +62,7 @@ authRouter.post('/users/sync', async (req: Request, res: Response) => {
       res.json({ ...student, userType: 'Student' });
     } else {
       const existingStaff = await repository.getStaffByEmail(email);
-      const staff = await repository.upsertStaffUser({
+      let staff = await repository.upsertStaffUser({
         id: existingStaff?.id || claims.oid || claims.sub || 'staff-' + email,
         email,
         displayName: claims.name || email,
@@ -70,6 +71,7 @@ authRouter.post('/users/sync', async (req: Request, res: Response) => {
         jobTitle: claims.jobTitle,
         department: claims.department,
       });
+      staff = await applyInitialAdmin(staff);
       setSessionCookie('Staff', staff.id);
       res.json({ ...staff, userType: 'Staff' });
     }
