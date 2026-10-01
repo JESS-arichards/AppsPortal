@@ -116,89 +116,139 @@ export const SignInPage: React.FC = () => {
   };
 
   const helpdeskEmail = window.PORTAL_CONFIG?.APP_HELPDESK_EMAIL || 'helpdesk@jess.sch.ae';
+  const logoSrc = branding.navLogo || '/Site_Logo.png';
 
   return (
     <div className="signin-page-layout">
-      {/* Top Bar with School Website Logo Link */}
-      <div className="signin-top-bar" style={{ backgroundColor: 'var(--color-main)' }}>
-        <a
-          href="https://www.jess.sch.ae"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="school-logo-link"
-          title="Visit JESS Dubai Website"
-        >
-          <img src={branding.navLogo || '/Site_Logo.png'} alt="JESS Dubai Official Website" className="signin-school-logo" />
-        </a>
-      </div>
+      {/* Dynamic Ambient Glass Glow Spheres */}
+      <div className="glass-ambient-sphere sphere-1" aria-hidden="true" />
+      <div className="glass-ambient-sphere sphere-2" aria-hidden="true" />
+      <div className="glass-ambient-sphere sphere-3" aria-hidden="true" />
+
+      {/* Top Glass Bar with School Website Link */}
+      <header className="signin-top-bar">
+        <div className="signin-top-bar-inner">
+          <a
+            href="https://www.jess.sch.ae"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="school-logo-link"
+            title="Visit JESS Dubai Official Website"
+          >
+            <img
+              src={logoSrc}
+              alt="JESS Dubai Official Website"
+              className="signin-school-logo"
+            />
+            <div className="school-brand-text">
+              <span className="school-brand-name">JESS DUBAI</span>
+              <span className="school-brand-sub">Community Portal</span>
+            </div>
+          </a>
+
+          <a
+            href="https://www.jess.sch.ae"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="school-external-link"
+            title="Open JESS Dubai Website in new tab"
+          >
+            <span>School Website</span>
+            <span aria-hidden="true" className="external-icon">↗</span>
+          </a>
+        </div>
+      </header>
 
       <main className="signin-main-container">
-        {/* Left Column: Welcome & Values */}
-        <section className="signin-welcome-section" style={{ borderLeft: '4px solid var(--color-accent)' }}>
-          <span className="eyebrow" style={{ color: 'var(--color-accent)' }}>{content.welcomeLabel}</span>
-          <h1 className="welcome-headline" style={{ color: 'var(--color-main)' }}>{content.welcomeHeadline}</h1>
+        {/* Left Column: Glass Welcome & Values */}
+        <section className="signin-welcome-section glass-panel">
+          <div className="welcome-tag">
+            <span className="welcome-tag-pulse" aria-hidden="true" />
+            <span className="eyebrow">{content.welcomeLabel}</span>
+          </div>
+
+          <h1 className="welcome-headline">{content.welcomeHeadline}</h1>
+          <p className="welcome-description">
+            Your unified portal for distance learning, staff parking, attendance tracking, and live school event broadcasts.
+          </p>
 
           <div className="values-list-wrapper">
-            <h2 className="sr-only">Our Core Values</h2>
+            <h2 className="values-heading">Our Core Values</h2>
             <ul className="values-list">
               {valuesList.map((val, idx) => (
                 <li key={idx} className="value-item">
-                  <span className="value-bullet" aria-hidden="true" style={{ color: 'var(--color-accent)' }}>◆</span>
-                  <span>{val}</span>
+                  <span className="value-bullet" aria-hidden="true">◆</span>
+                  <span className="value-label">{val}</span>
                 </li>
               ))}
             </ul>
           </div>
         </section>
 
-        {/* Right Column: Sign In Choices */}
+        {/* Right Column: Sign In Glass Card */}
         <section className="signin-actions-section" aria-labelledby="signin-heading">
-          <div className="signin-card">
-            <h2 id="signin-heading" className="card-heading" style={{ color: 'var(--color-main)' }}>
-              {content.signInHeading}
-            </h2>
-            <p className="card-intro">{content.signInIntro}</p>
+          <div className="signin-card glass-panel">
+            <div className="signin-card-header">
+              <h2 id="signin-heading" className="card-heading">
+                {content.signInHeading}
+              </h2>
+              <p className="card-intro">{content.signInIntro}</p>
+            </div>
 
             {errorMessage && (
-              <div className="status-box error-box" role="alert" style={{ marginBottom: '16px' }}>
-                <span aria-hidden="true">⚠️</span>
+              <div className="status-box error-box" role="alert">
+                <span className="status-icon" aria-hidden="true">⚠️</span>
                 <span>{errorMessage}</span>
               </div>
             )}
 
             {statusMessage && (
-              <div className="status-box success-box" role="status" style={{ marginBottom: '16px' }}>
-                <span aria-hidden="true">✓</span>
+              <div className="status-box success-box" role="status">
+                <span className="status-icon" aria-hidden="true">✓</span>
                 <span>{statusMessage}</span>
               </div>
             )}
 
             {/* Option 1: Staff & Students (Microsoft Entra ID) */}
-            <div className="auth-choice-box">
+            <div className="auth-choice-box staff-choice-box">
               <div className="choice-text">
-                <h3 className="choice-title">{content.staffChoiceTitle}</h3>
+                <div className="choice-title-row">
+                  <h3 className="choice-title">{content.staffChoiceTitle}</h3>
+                  <span className="choice-badge">Microsoft 365</span>
+                </div>
                 <p className="choice-description">{content.staffChoiceDescription}</p>
               </div>
 
               <button
                 type="button"
-                className="btn btn-primary btn-entra-login"
+                className="btn-entra-login"
                 onClick={handleStaffLogin}
-                style={{ backgroundColor: 'var(--color-main)', color: '#FFFFFF' }}
+                title="Sign in with your Microsoft school account"
               >
-                <span className="ms-logo-icon" aria-hidden="true">⊞</span>
-                <span>Staff &amp; Student Login</span>
+                {/* Official 4-color Microsoft Logo */}
+                <svg className="ms-logo-svg" width="20" height="20" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+                  <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+                  <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+                  <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+                </svg>
+                <span className="btn-text">Sign in with Microsoft</span>
               </button>
             </div>
 
             <div className="choice-divider">
-              <span>OR</span>
+              <span className="divider-line" />
+              <span className="divider-text">OR</span>
+              <span className="divider-line" />
             </div>
 
             {/* Option 2: Parents & Guardians (One-time code) */}
-            <div className="auth-choice-box">
+            <div className="auth-choice-box parent-choice-box">
               <div className="choice-text">
-                <h3 className="choice-title">{content.parentChoiceTitle}</h3>
+                <div className="choice-title-row">
+                  <h3 className="choice-title">{content.parentChoiceTitle}</h3>
+                  <span className="choice-badge choice-badge-parent">Email Passcode</span>
+                </div>
                 <p className="choice-description">{content.parentChoiceDescription}</p>
               </div>
 
@@ -209,7 +259,8 @@ export const SignInPage: React.FC = () => {
                 aria-controls="parent-login-form-area"
                 onClick={() => setParentFormExpanded(!parentFormExpanded)}
               >
-                <span>{parentFormExpanded ? '▲ Hide Parent Login' : '▼ Parent Login (One-Time Code)'}</span>
+                <span>{parentFormExpanded ? 'Hide Parent Login' : 'Parent Login (One-Time Code)'}</span>
+                <span className="toggle-chevron" aria-hidden="true">{parentFormExpanded ? '▲' : '▼'}</span>
               </button>
 
               {parentFormExpanded && (
@@ -235,8 +286,7 @@ export const SignInPage: React.FC = () => {
                       <button
                         type="submit"
                         disabled={loading}
-                        className="btn btn-accent btn-full-width"
-                        style={{ backgroundColor: 'var(--color-accent)', color: '#FFFFFF' }}
+                        className="btn btn-primary btn-full-width btn-send-code"
                       >
                         {loading ? 'Sending code...' : content.sendCodeLabel}
                       </button>
@@ -266,8 +316,7 @@ export const SignInPage: React.FC = () => {
                         <button
                           type="submit"
                           disabled={loading || parentCode.length !== 6}
-                          className="btn btn-accent"
-                          style={{ backgroundColor: 'var(--color-accent)', color: '#FFFFFF' }}
+                          className="btn btn-primary btn-verify-code"
                         >
                           {loading ? 'Verifying...' : content.verifyCodeLabel}
                         </button>
@@ -289,6 +338,7 @@ export const SignInPage: React.FC = () => {
 
             {/* Helpdesk Notice */}
             <div className="card-helpdesk-footer">
+              <span className="help-icon" aria-hidden="true">💬</span>
               <span>{content.helpPrompt}</span>{' '}
               <a href={`mailto:${helpdeskEmail}`} className="helpdesk-link">
                 {content.helpLinkText}
@@ -297,7 +347,7 @@ export const SignInPage: React.FC = () => {
 
             {/* Dev / Test Role Switcher (Convenience for testing without external Entra) */}
             <div className="dev-test-bar">
-              <span className="dev-label">Local Testing Shortcuts:</span>
+              <div className="dev-test-title">Local Testing Shortcuts:</div>
               <div className="dev-buttons">
                 <button
                   type="button"
@@ -339,16 +389,16 @@ export const SignInPage: React.FC = () => {
       {/* Email Not Found Modal Dialog */}
       {showNotFoundDialog && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="notfound-title">
-          <div className="modal-content">
+          <div className="modal-content glass-panel">
             <h3 id="notfound-title" className="modal-title">Parent Record Not Found</h3>
-            <p className="modal-body">
+            <p className="modal-body-text">
               The email address <strong>{parentEmail}</strong> could not be found in our registered parent database.
             </p>
-            <p className="modal-body">
+            <p className="modal-body-text">
               If you are a parent or guardian of a JESS Dubai student, please contact our IT Helpdesk to register your email address on the student information system.
             </p>
             <div className="modal-actions">
-              <a href={`mailto:${helpdeskEmail}?subject=Parent%20Portal%20Registration%20Request`} className="btn btn-accent">
+              <a href={`mailto:${helpdeskEmail}?subject=Parent%20Portal%20Registration%20Request`} className="btn btn-primary">
                 Email Helpdesk
               </a>
               <button

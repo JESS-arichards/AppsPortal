@@ -33,7 +33,11 @@ export const Header: React.FC = () => {
       <div className="header-container">
         {/* Logo / Home Link */}
         <Link to="/portal" className="brand-link" onClick={closeMenu}>
-          <img src={navLogoSrc} alt="JESS Dubai Portal" className="brand-logo" />
+          <img
+            src={navLogoSrc}
+            alt="JESS Dubai Portal"
+            className="brand-logo"
+          />
         </Link>
 
         {/* Mobile menu toggle button */}

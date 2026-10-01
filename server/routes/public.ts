@@ -4,8 +4,8 @@ import { config } from '../config.js';
 
 export const publicRouter = Router();
 
-// GET /api/branding
-publicRouter.get('/branding', async (_req: Request, res: Response) => {
+// GET /api/branding & /branding
+publicRouter.get(['/api/branding', '/branding'], async (_req: Request, res: Response) => {
   try {
     const branding = await repository.getBranding();
     res.json({ branding });
@@ -14,8 +14,8 @@ publicRouter.get('/branding', async (_req: Request, res: Response) => {
   }
 });
 
-// GET /api/home-content
-publicRouter.get('/home-content', async (_req: Request, res: Response) => {
+// GET /api/home-content & /home-content
+publicRouter.get(['/api/home-content', '/home-content'], async (_req: Request, res: Response) => {
   try {
     const content = await repository.getHomeContent();
     res.json({ content });
@@ -24,8 +24,8 @@ publicRouter.get('/home-content', async (_req: Request, res: Response) => {
   }
 });
 
-// GET /api/login-content
-publicRouter.get('/login-content', async (_req: Request, res: Response) => {
+// GET /api/login-content & /login-content
+publicRouter.get(['/api/login-content', '/login-content'], async (_req: Request, res: Response) => {
   try {
     const content = await repository.getLoginContent();
     res.json({ content });
