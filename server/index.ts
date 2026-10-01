@@ -60,7 +60,7 @@ app.all('/api/*', (_req: Request, res: Response) => {
 });
 
 // Serve frontend static assets
-const distPath = path.join(__dirname, '..', 'dist');
+const distPath = path.resolve(__dirname, '..', '..', 'dist');
 app.use(express.static(distPath));
 
 // Clean URL routing: Map portal routes to index.html for Single Page Application
