@@ -138,10 +138,6 @@ export const SignInPage: React.FC = () => {
               alt="JESS Dubai Official Website"
               className="signin-school-logo"
             />
-            <div className="school-brand-text">
-              <span className="school-brand-name">JESS DUBAI</span>
-              <span className="school-brand-sub">Community Portal</span>
-            </div>
           </a>
         </div>
       </header>

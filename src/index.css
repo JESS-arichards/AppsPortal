@@ -959,27 +959,6 @@ a {
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
 }
 
-.school-brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-
-.school-brand-name {
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #FFFFFF;
-}
-
-.school-brand-sub {
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--color-accent, #BA9B37);
-}
-
 .school-external-link {
   display: inline-flex;
   align-items: center;
