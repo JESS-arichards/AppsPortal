@@ -15,7 +15,6 @@ export const SignInPage: React.FC = () => {
 
   const [content, setContent] = useState<LoginContent>({
     id: 1,
-    welcomeLabel: 'JESS Dubai',
     welcomeHeadline: 'Welcome to the School Community Portal',
     valuesJson: JSON.stringify(['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity']),
     signInHeading: 'Sign in to JESS Portal',

@@ -31,10 +31,8 @@ export class MemoryStore {
     textColor: '#212529',
     navBgColor: null,
     navTextColor: null,
-    navAccentColor: null,
     heroBgColor: null,
     heroTextColor: null,
-    heroAccentColor: null,
     navLogo: null,
     favicon: null,
     updatedAt: new Date().toISOString(),
@@ -57,9 +55,8 @@ export class MemoryStore {
 
   loginContent: Types.PortalLoginContent = {
     id: 1,
-    welcomeLabel: 'JESS Dubai',
     welcomeHeadline: 'Welcome to the School Community Portal',
-    valuesJson: JSON.stringify(['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity']),
+    valuesJson: JSON.stringify(['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity'].map(text => ({ text, icon: null }))),
     signInHeading: 'Sign in to JESS Portal',
     signInIntro: 'Choose your login method below to access school services.',
     staffChoiceTitle: 'Staff & Students',
@@ -250,28 +247,34 @@ export class MemoryStore {
 
 export const memoryStore = new MemoryStore();
 
-function locateSchemaFile(): string | null {
+export function locateDatabaseFile(fileName: string): string | null {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    path.resolve(process.cwd(), 'database', 'schema.sql'),
-    path.resolve(here, '..', '..', 'database', 'schema.sql'),
-    path.resolve(here, '..', '..', '..', 'database', 'schema.sql'),
+    path.resolve(process.cwd(), 'database', fileName),
+    path.resolve(here, '..', '..', 'database', fileName),
+    path.resolve(here, '..', '..', '..', 'database', fileName),
   ];
   return candidates.find(p => fs.existsSync(p)) || null;
 }
 
-// schema.sql is fully idempotent (IF NOT EXISTS guards), so it is safe to run on every start.
-async function ensureSchema(activePool: sql.ConnectionPool): Promise<void> {
-  const schemaPath = locateSchemaFile();
-  if (!schemaPath) {
-    console.warn('[Database] database/schema.sql not found; skipping schema verification.');
-    return;
-  }
-  const batches = fs.readFileSync(schemaPath, 'utf8').split(/^\s*GO\s*$/im).map(b => b.trim()).filter(Boolean);
+/** Runs a .sql script from the database folder, split into batches on GO lines. */
+export async function runSqlScript(activePool: sql.ConnectionPool, fileName: string): Promise<boolean> {
+  const scriptPath = locateDatabaseFile(fileName);
+  if (!scriptPath) return false;
+  const batches = fs.readFileSync(scriptPath, 'utf8').split(/^\s*GO\s*$/im).map(b => b.trim()).filter(Boolean);
   for (const batch of batches) {
     await activePool.request().batch(batch);
   }
-  console.log('[Database] Schema verified against database/schema.sql.');
+  return true;
+}
+
+// schema.sql is fully idempotent (IF NOT EXISTS guards), so it is safe to run on every start.
+async function ensureSchema(activePool: sql.ConnectionPool): Promise<void> {
+  if (await runSqlScript(activePool, 'schema.sql')) {
+    console.log('[Database] Schema verified against database/schema.sql.');
+  } else {
+    console.warn('[Database] database/schema.sql not found; skipping schema verification.');
+  }
 }
 
 export async function initDatabase(): Promise<void> {
@@ -300,6 +303,8 @@ export async function initDatabase(): Promise<void> {
     } catch (err) {
       lastError = err;
       console.error(`[Database] Connection attempt ${attempt} failed:`, (err as Error)?.message || err);
+      // Schema guard errors (THROW 50001 in schema.sql) will not fix themselves on retry.
+      if ((err as any)?.number === 50001) break;
       if (attempt < maxAttempts) await new Promise(r => setTimeout(r, attempt * 2000));
     }
   }

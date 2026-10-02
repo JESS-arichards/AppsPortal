@@ -2108,10 +2108,8 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
     textColor: '#212529',
     navBgColor: null,
     navTextColor: null,
-    navAccentColor: null,
     heroBgColor: null,
     heroTextColor: null,
-    heroAccentColor: null,
     navLogo: null,
     favicon: null,
   });
@@ -2651,28 +2649,15 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
           </button>
           {loginContentOpen && (
           <form onSubmit={handleSaveLogin}>
-            <div className="form-row-two">
-              <div className="form-group">
-                <label className="form-label">Welcome Label (Max 120)</label>
-                <input
-                  type="text"
-                  maxLength={120}
-                  className="form-control"
-                  value={loginData.welcomeLabel}
-                  onChange={e => setLoginData({ ...loginData, welcomeLabel: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Welcome Headline (Max 200)</label>
-                <input
-                  type="text"
-                  maxLength={200}
-                  className="form-control"
-                  value={loginData.welcomeHeadline}
-                  onChange={e => setLoginData({ ...loginData, welcomeHeadline: e.target.value })}
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label">Welcome Headline (Max 200)</label>
+              <input
+                type="text"
+                maxLength={200}
+                className="form-control"
+                value={loginData.welcomeHeadline}
+                onChange={e => setLoginData({ ...loginData, welcomeHeadline: e.target.value })}
+              />
             </div>
 
             {/* Values are displayed in the order listed */}

@@ -43,6 +43,11 @@ async function execute(text: string, params: Params = {}, tx?: sql.Transaction):
   return result.rowsAffected.reduce((sum, n) => sum + n, 0);
 }
 
+async function queryMulti(text: string, params: Params = {}, tx?: sql.Transaction): Promise<any[][]> {
+  const result = await request(params, tx).query(text);
+  return (result.recordsets as unknown as any[][]) || [];
+}
+
 async function inTransaction<T>(work: (tx: sql.Transaction) => Promise<T>): Promise<T> {
   const tx = new sql.Transaction(requirePool());
   await tx.begin();
@@ -84,15 +89,24 @@ function withoutUndefined<T extends object>(obj: T): Partial<T> {
 }
 
 const RELEASE_SELECT = `
-  SELECT r.id, r.ownerUserId, r.space, r.[date], r.reserverUserId, r.reservedAt, r.createdAt,
+  SELECT r.id, r.ownerUserId, r.space, r.[date], r.reserverUserId, r.reservedAt, r.absenceRequestId, r.createdAt,
          o.displayName AS ownerName, v.displayName AS reserverName
   FROM ParkingReleases r
-  LEFT JOIN StaffUsers o ON o.id = r.ownerUserId
-  LEFT JOIN StaffUsers v ON v.id = r.reserverUserId`;
+  LEFT JOIN Users o ON o.id = r.ownerUserId
+  LEFT JOIN Users v ON v.id = r.reserverUserId`;
 
-const BRANDING_COLUMNS = ['mainColor', 'accentColor', 'textColor', 'navBgColor', 'navTextColor', 'navAccentColor', 'heroBgColor', 'heroTextColor', 'heroAccentColor', 'navLogo', 'favicon'];
+const BRANDING_COLUMNS = ['mainColor', 'accentColor', 'textColor', 'navBgColor', 'navTextColor', 'heroBgColor', 'heroTextColor', 'navLogo', 'favicon'];
 const HOME_COLUMNS = ['heroLabel', 'heroHeadline', 'heroIntro', 'heroImage', 'heroImageAlt', 'captionName', 'captionRole', 'welcomeLabel', 'welcomeHeading', 'welcomeMessage'];
-const LOGIN_COLUMNS = ['welcomeLabel', 'welcomeHeadline', 'valuesJson', 'signInHeading', 'signInIntro', 'staffChoiceTitle', 'staffChoiceDescription', 'parentChoiceTitle', 'parentChoiceDescription', 'parentEmailLabel', 'parentCodeLabel', 'sendCodeLabel', 'verifyCodeLabel', 'resendCodeLabel', 'helpPrompt', 'helpLinkText'];
+const LOGIN_COLUMNS = ['welcomeHeadline', 'valuesJson', 'signInHeading', 'signInIntro', 'staffChoiceTitle', 'staffChoiceDescription', 'parentChoiceTitle', 'parentChoiceDescription', 'parentEmailLabel', 'parentCodeLabel', 'sendCodeLabel', 'verifyCodeLabel', 'resendCodeLabel', 'helpPrompt', 'helpLinkText'];
+
+type UserType = 'Staff' | 'Student' | 'Parent';
+
+interface LoadedUsers {
+  rows: any[];
+  roles: Map<string, string[]>;
+  classes: Map<string, string[]>;
+  sections: Map<string, string[]>;
+}
 
 /** Azure SQL implementation of the repository. Mirrors MemoryRepository behaviour. */
 export class SqlRepository {
@@ -162,6 +176,7 @@ export class SqlRepository {
       date: r.date,
       reserverUserId: r.reserverUserId ?? null,
       reservedAt: isoOrNull(r.reservedAt),
+      absenceRequestId: r.absenceRequestId ?? null,
       createdAt: iso(r.createdAt),
       ownerName: r.ownerName || unknownOwner,
       reserverName: r.reserverName || undefined,
@@ -193,114 +208,131 @@ export class SqlRepository {
       endDate: r.endDate,
       reason: r.reason,
       releasedSpace: r.releasedSpace ?? null,
-      parkingReleaseIds: r.parkingReleaseIds ?? null,
       createdAt: iso(r.createdAt),
     };
   }
 
-  private async loadStaff(where: string, params: Params = {}, tx?: sql.Transaction): Promise<Types.StaffUser[]> {
-    const rows = await query(`SELECT * FROM StaffUsers ${where}`, params, tx);
-    if (!rows.length) return [];
-    const ids = JSON.stringify(rows.map(r => r.id));
-    const idFilter = 'staffUserId IN (SELECT value FROM OPENJSON(@ids))';
-    const roles = groupBy(await query(`SELECT staffUserId, [role] FROM StaffUserRoles WHERE ${idFilter}`, { ids }, tx), 'staffUserId', 'role');
-    const classes = groupBy(await query(`SELECT staffUserId, classCode FROM StaffClasses WHERE ${idFilter}`, { ids }, tx), 'staffUserId', 'classCode');
-    const sections = groupBy(await query(`SELECT staffUserId, section FROM StaffAdminTabPermissions WHERE ${idFilter}`, { ids }, tx), 'staffUserId', 'section');
+  /**
+   * Loads users of one type plus their roles/classes/admin sections in a single round trip.
+   * `filter` is a SQL predicate over the Users table (e.g. 'id = @id').
+   */
+  private async loadUsers(userType: UserType, filter: string, params: Params = {}, tx?: sql.Transaction): Promise<LoadedUsers> {
+    const extras = userType === 'Staff'
+      ? `SELECT r.userId, r.[role] FROM UserRoles r JOIN @ids i ON i.id = r.userId;
+         SELECT c.userId, c.classCode FROM UserClasses c JOIN @ids i ON i.id = c.userId;
+         SELECT s.userId, s.section FROM UserAdminSections s JOIN @ids i ON i.id = s.userId;`
+      : userType === 'Student'
+        ? 'SELECT c.userId, c.classCode FROM UserClasses c JOIN @ids i ON i.id = c.userId;'
+        : '';
+    const sets = await queryMulti(`
+      DECLARE @ids TABLE (id NVARCHAR(128) PRIMARY KEY);
+      INSERT INTO @ids (id) SELECT id FROM Users WHERE userType = @userType AND (${filter});
+      SELECT u.* FROM Users u JOIN @ids i ON i.id = u.id ORDER BY u.displayName;
+      ${extras}`, { ...params, userType }, tx);
+    const rows = sets[0] || [];
+    const empty = new Map<string, string[]>();
+    if (userType === 'Staff') {
+      return {
+        rows,
+        roles: groupBy(sets[1] || [], 'userId', 'role'),
+        classes: groupBy(sets[2] || [], 'userId', 'classCode'),
+        sections: groupBy(sets[3] || [], 'userId', 'section'),
+      };
+    }
+    return { rows, roles: empty, classes: userType === 'Student' ? groupBy(sets[1] || [], 'userId', 'classCode') : empty, sections: empty };
+  }
+
+  private async loadStaff(filter: string, params: Params = {}, tx?: sql.Transaction): Promise<Types.StaffUser[]> {
+    const { rows, roles, classes, sections } = await this.loadUsers('Staff', filter, params, tx);
     return rows.map(r => this.mapStaff(r, roles.get(r.id) || [], classes.get(r.id) || [], sections.get(r.id) || []));
   }
 
-  private async loadStudents(where: string, params: Params = {}, tx?: sql.Transaction): Promise<Types.StudentUser[]> {
-    const rows = await query(`SELECT * FROM StudentUsers ${where}`, params, tx);
-    if (!rows.length) return [];
-    const ids = JSON.stringify(rows.map(r => r.id));
-    const classes = groupBy(
-      await query('SELECT studentUserId, classCode FROM StudentClasses WHERE studentUserId IN (SELECT value FROM OPENJSON(@ids))', { ids }, tx),
-      'studentUserId', 'classCode');
+  private async loadStudents(filter: string, params: Params = {}, tx?: sql.Transaction): Promise<Types.StudentUser[]> {
+    const { rows, classes } = await this.loadUsers('Student', filter, params, tx);
     return rows.map(r => this.mapStudent(r, classes.get(r.id) || []));
   }
 
-  private async loadParents(where: string, params: Params = {}, tx?: sql.Transaction): Promise<Types.ParentUser[]> {
-    const rows = await query(`SELECT * FROM ParentUsers ${where}`, params, tx);
+  private async loadParents(filter: string, params: Params = {}, tx?: sql.Transaction): Promise<Types.ParentUser[]> {
+    const { rows } = await this.loadUsers('Parent', filter, params, tx);
     return rows.map(r => this.mapParent(r));
   }
 
-  private async saveStaff(u: Types.StaffUser, tx: sql.Transaction): Promise<void> {
-    const params = {
-      id: u.id, email: u.email, displayName: u.displayName, forename: u.forename ?? null, surname: u.surname ?? null,
+  /** Inserts or updates the Users row and replaces the given membership lists. */
+  private async saveUser(
+    userType: UserType,
+    u: { id: string; email: string; displayName: string; forename?: string | null; surname?: string | null; authType: string; jobTitle?: string | null; division?: string | null; department?: string | null; profilePicture?: string | null; parkingSpace?: number | null; extension?: number | null; misId?: string | null },
+    lists: { roles?: string[]; classes?: string[]; sections?: string[] },
+    tx: sql.Transaction,
+  ): Promise<void> {
+    const params: Params = {
+      id: u.id, userType, email: u.email, displayName: u.displayName, forename: u.forename ?? null, surname: u.surname ?? null,
       authType: u.authType, jobTitle: u.jobTitle ?? null, division: u.division ?? null, department: u.department ?? null,
       profilePicture: u.profilePicture ?? null, parkingSpace: u.parkingSpace ?? null, extension: u.extension ?? null, misId: u.misId ?? null,
-      roles: JSON.stringify(u.roles || []), classes: JSON.stringify(u.classes || []), sections: JSON.stringify(u.adminSections || []),
+      roles: JSON.stringify(lists.roles || []), classes: JSON.stringify(lists.classes || []), sections: JSON.stringify(lists.sections || []),
     };
-    await execute(`
-      IF EXISTS (SELECT 1 FROM StaffUsers WHERE id = @id)
-        UPDATE StaffUsers SET email = @email, displayName = @displayName, forename = @forename, surname = @surname,
+    const statements = [`
+      IF EXISTS (SELECT 1 FROM Users WHERE id = @id)
+        UPDATE Users SET email = @email, displayName = @displayName, forename = @forename, surname = @surname,
           authType = @authType, jobTitle = @jobTitle, division = @division, department = @department,
           profilePicture = @profilePicture, parkingSpace = @parkingSpace, extension = @extension, misId = @misId, updatedAt = SYSUTCDATETIME()
-        WHERE id = @id;
+        WHERE id = @id AND userType = @userType;
       ELSE
-        INSERT INTO StaffUsers (id, email, displayName, forename, surname, authType, jobTitle, division, department, profilePicture, parkingSpace, extension, misId)
-        VALUES (@id, @email, @displayName, @forename, @surname, @authType, @jobTitle, @division, @department, @profilePicture, @parkingSpace, @extension, @misId);
-
-      DELETE FROM StaffUserRoles WHERE staffUserId = @id;
-      INSERT INTO StaffUserRoles (staffUserId, [role]) SELECT DISTINCT @id, value FROM OPENJSON(@roles);
-
-      DELETE FROM StaffClasses WHERE staffUserId = @id;
-      INSERT INTO StaffClasses (staffUserId, classCode)
-        SELECT DISTINCT @id, c.code FROM Classes c WHERE c.code IN (SELECT value FROM OPENJSON(@classes));
-
-      DELETE FROM StaffAdminTabPermissions WHERE staffUserId = @id;
-      INSERT INTO StaffAdminTabPermissions (staffUserId, section) SELECT DISTINCT @id, value FROM OPENJSON(@sections);
-    `, params, tx);
+        INSERT INTO Users (id, userType, email, displayName, forename, surname, authType, jobTitle, division, department, profilePicture, parkingSpace, extension, misId)
+        VALUES (@id, @userType, @email, @displayName, @forename, @surname, @authType, @jobTitle, @division, @department, @profilePicture, @parkingSpace, @extension, @misId);`];
+    if (lists.roles) {
+      statements.push(`
+        DELETE FROM UserRoles WHERE userId = @id;
+        INSERT INTO UserRoles (userId, [role]) SELECT DISTINCT @id, value FROM OPENJSON(@roles);`);
+    }
+    if (lists.classes) {
+      statements.push(`
+        DELETE FROM UserClasses WHERE userId = @id;
+        INSERT INTO UserClasses (userId, classCode)
+          SELECT DISTINCT @id, c.code FROM Classes c WHERE c.code IN (SELECT value FROM OPENJSON(@classes));`);
+    }
+    if (lists.sections) {
+      statements.push(`
+        DELETE FROM UserAdminSections WHERE userId = @id;
+        INSERT INTO UserAdminSections (userId, section) SELECT DISTINCT @id, value FROM OPENJSON(@sections);`);
+    }
+    await execute(statements.join('\n'), params, tx);
   }
 
-  private async saveStudent(u: Types.StudentUser, tx: sql.Transaction): Promise<void> {
-    const params = {
-      id: u.id, email: u.email, displayName: u.displayName, forename: u.forename ?? null, surname: u.surname ?? null,
-      division: u.division ?? null, department: u.department ?? null, profilePicture: u.profilePicture ?? null,
-      classes: JSON.stringify(u.classes || []),
-    };
-    await execute(`
-      IF EXISTS (SELECT 1 FROM StudentUsers WHERE id = @id)
-        UPDATE StudentUsers SET email = @email, displayName = @displayName, forename = @forename, surname = @surname,
-          division = @division, department = @department, profilePicture = @profilePicture, updatedAt = SYSUTCDATETIME()
-        WHERE id = @id;
-      ELSE
-        INSERT INTO StudentUsers (id, email, displayName, forename, surname, authType, division, department, profilePicture)
-        VALUES (@id, @email, @displayName, @forename, @surname, 'Entra', @division, @department, @profilePicture);
+  private saveStaff(u: Types.StaffUser, tx: sql.Transaction): Promise<void> {
+    return this.saveUser('Staff', u, { roles: u.roles || [], classes: u.classes || [], sections: u.adminSections || [] }, tx);
+  }
 
-      DELETE FROM StudentClasses WHERE studentUserId = @id;
-      INSERT INTO StudentClasses (studentUserId, classCode)
-        SELECT DISTINCT @id, c.code FROM Classes c WHERE c.code IN (SELECT value FROM OPENJSON(@classes));
-    `, params, tx);
+  private saveStudent(u: Types.StudentUser, tx: sql.Transaction): Promise<void> {
+    return this.saveUser('Student', u, { classes: u.classes || [] }, tx);
   }
 
   // -------------------------------------------------------------
   // Users & Roles
   // -------------------------------------------------------------
   async getStaffById(id: string): Promise<Types.StaffUser | null> {
-    return (await this.loadStaff('WHERE id = @id', { id }))[0] || null;
+    return (await this.loadStaff('id = @id', { id }))[0] || null;
   }
 
   async getStaffByEmail(email: string): Promise<Types.StaffUser | null> {
-    return (await this.loadStaff('WHERE LOWER(email) = @email', { email: email.toLowerCase().trim() }))[0] || null;
+    return (await this.loadStaff('email = @email', { email: email.toLowerCase().trim() }))[0] || null;
   }
 
   async getStudentById(id: string): Promise<Types.StudentUser | null> {
-    return (await this.loadStudents('WHERE id = @id', { id }))[0] || null;
+    return (await this.loadStudents('id = @id', { id }))[0] || null;
   }
 
   async getStudentByEmail(email: string): Promise<Types.StudentUser | null> {
-    return (await this.loadStudents('WHERE LOWER(email) = @email', { email: email.toLowerCase().trim() }))[0] || null;
+    return (await this.loadStudents('email = @email', { email: email.toLowerCase().trim() }))[0] || null;
   }
 
   async getParentById(id: string): Promise<Types.ParentUser | null> {
-    const parent = (await this.loadParents('WHERE id = @id', { id }))[0];
+    const parent = (await this.loadParents('id = @id', { id }))[0];
     if (!parent) return null;
     return { ...parent, linkedStudents: await this.getParentStudents(id) };
   }
 
   async getParentByEmail(email: string): Promise<Types.ParentUser | null> {
-    const parent = (await this.loadParents('WHERE LOWER(email) = @email', { email: email.toLowerCase().trim() }))[0];
+    const parent = (await this.loadParents('email = @email', { email: email.toLowerCase().trim() }))[0];
     if (!parent) return null;
     return { ...parent, linkedStudents: await this.getParentStudents(parent.id) };
   }
@@ -358,8 +390,8 @@ export class SqlRepository {
     const id = 'parent-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
     try {
       await execute(`
-        INSERT INTO ParentUsers (id, email, displayName, forename, surname, authType, division)
-        VALUES (@id, @email, @displayName, @forename, @surname, 'Local', 'Parent Community')`, {
+        INSERT INTO Users (id, userType, email, displayName, forename, surname, authType, division)
+        VALUES (@id, 'Parent', @email, @displayName, @forename, @surname, 'Local', 'Parent Community')`, {
         id,
         email: normalizedEmail,
         displayName: userData.displayName.trim(),
@@ -380,7 +412,7 @@ export class SqlRepository {
       }
     }
 
-    return (await this.loadParents('WHERE id = @id', { id }))[0];
+    return (await this.loadParents('id = @id', { id }))[0];
   }
 
   async updateStaffUser(id: string, updates: Partial<Types.StaffUser>): Promise<Types.StaffUser> {
@@ -429,7 +461,7 @@ export class SqlRepository {
   }
 
   async updateParentUser(id: string, updates: Partial<Types.ParentUser>): Promise<Types.ParentUser> {
-    const parent = (await this.loadParents('WHERE id = @id', { id }))[0];
+    const parent = (await this.loadParents('id = @id', { id }))[0];
     if (!parent) throw new Error('NOT_FOUND');
     if (updates.email && updates.email.toLowerCase().trim() !== parent.email.toLowerCase()) {
       const existing = await this.getParentByEmail(updates.email);
@@ -438,9 +470,9 @@ export class SqlRepository {
     const merged = { ...parent, ...withoutUndefined(updates), email: updates.email ? updates.email.toLowerCase().trim() : parent.email };
     try {
       await execute(`
-        UPDATE ParentUsers SET email = @email, displayName = @displayName, forename = @forename, surname = @surname,
+        UPDATE Users SET email = @email, displayName = @displayName, forename = @forename, surname = @surname,
           division = @division, profilePicture = @profilePicture, updatedAt = SYSUTCDATETIME()
-        WHERE id = @id`, {
+        WHERE id = @id AND userType = 'Parent'`, {
         id,
         email: merged.email,
         displayName: merged.displayName,
@@ -453,23 +485,26 @@ export class SqlRepository {
       if (isUniqueViolation(err)) throw new Error('DUPLICATE_EMAIL');
       throw err;
     }
-    return (await this.loadParents('WHERE id = @id', { id }))[0];
+    return (await this.loadParents('id = @id', { id }))[0];
   }
 
   async updateUserProfilePicture(type: 'Staff' | 'Student' | 'Parent', id: string, pictureDataUrl: string): Promise<string> {
-    const table = { Staff: 'StaffUsers', Student: 'StudentUsers', Parent: 'ParentUsers' }[type];
-    if (table) {
-      await execute(`UPDATE ${table} SET profilePicture = @picture, updatedAt = SYSUTCDATETIME() WHERE id = @id`, { id, picture: pictureDataUrl });
-    }
+    await execute('UPDATE Users SET profilePicture = @picture, updatedAt = SYSUTCDATETIME() WHERE id = @id AND userType = @type', { id, type, picture: pictureDataUrl });
     return pictureDataUrl;
   }
 
   async getAllUsers() {
+    const [staff, students, parents, classes] = await Promise.all([
+      this.loadStaff('1 = 1'),
+      this.loadStudents('1 = 1'),
+      this.loadParents('1 = 1'),
+      this.getAllClasses(),
+    ]);
     return {
-      staff: await this.loadStaff('ORDER BY displayName'),
-      students: await this.loadStudents('ORDER BY displayName'),
-      parents: await this.loadParents('ORDER BY displayName'),
-      classes: await this.getAllClasses(),
+      staff,
+      students,
+      parents,
+      classes,
       availableRoles: ['Admin', 'Staff', 'Onboarding', 'Oasis'],
       availableSections: ['users', 'classes', 'periods', 'parentLinks', 'parking', 'streaming', 'branding'],
     };
@@ -479,7 +514,10 @@ export class SqlRepository {
   // Parent Login Codes
   // -------------------------------------------------------------
   async saveParentLoginCode(email: string, codeHash: string, expiresAt: Date): Promise<void> {
-    await execute('INSERT INTO ParentLoginCodes (email, codeHash, expiresAt) VALUES (@email, @codeHash, @expiresAt)', {
+    // Issuing a new code supersedes older ones for the address; expired codes are purged on the way.
+    await execute(`
+      DELETE FROM ParentLoginCodes WHERE email = @email OR expiresAt < SYSUTCDATETIME();
+      INSERT INTO ParentLoginCodes (email, codeHash, expiresAt) VALUES (@email, @codeHash, @expiresAt);`, {
       email: email.toLowerCase().trim(),
       codeHash,
       expiresAt,
@@ -508,14 +546,14 @@ export class SqlRepository {
   // Parent / Student Links
   // -------------------------------------------------------------
   async getParentStudents(parentId: string): Promise<Types.StudentUser[]> {
-    return this.loadStudents('WHERE id IN (SELECT studentId FROM ParentStudents WHERE parentId = @parentId) ORDER BY displayName', { parentId });
+    return this.loadStudents('id IN (SELECT studentId FROM ParentStudents WHERE parentId = @parentId)', { parentId });
   }
 
   async getAllParentLinks(): Promise<Array<{ parent: Types.ParentUser; student: Types.StudentUser }>> {
     const links = await query('SELECT parentId, studentId FROM ParentStudents ORDER BY createdAt');
     if (!links.length) return [];
-    const parents = new Map((await this.loadParents('WHERE id IN (SELECT parentId FROM ParentStudents)')).map(p => [p.id, p]));
-    const students = new Map((await this.loadStudents('WHERE id IN (SELECT studentId FROM ParentStudents)')).map(s => [s.id, s]));
+    const parents = new Map((await this.loadParents('id IN (SELECT parentId FROM ParentStudents)')).map(p => [p.id, p]));
+    const students = new Map((await this.loadStudents('id IN (SELECT studentId FROM ParentStudents)')).map(s => [s.id, s]));
     const list: Array<{ parent: Types.ParentUser; student: Types.StudentUser }> = [];
     for (const link of links) {
       const parent = parents.get(link.parentId);
@@ -549,7 +587,7 @@ export class SqlRepository {
   async getPendingParentLinks(): Promise<Types.PendingParentLink[]> {
     const rows = await query(`
       SELECT p.id, p.parentId, p.studentEmail, p.createdAt, u.displayName AS parentName, u.email AS parentEmail
-      FROM PendingParentStudentLinks p LEFT JOIN ParentUsers u ON u.id = p.parentId
+      FROM PendingParentStudentLinks p LEFT JOIN Users u ON u.id = p.parentId
       ORDER BY p.createdAt`);
     return rows.map(r => ({
       id: r.id,
@@ -571,9 +609,9 @@ export class SqlRepository {
       await execute(`
         INSERT INTO ParentStudents (parentId, studentId)
         SELECT DISTINCT p.parentId, @studentId FROM PendingParentStudentLinks p
-        WHERE LOWER(p.studentEmail) = @email
+        WHERE p.studentEmail = @email
           AND NOT EXISTS (SELECT 1 FROM ParentStudents ps WHERE ps.parentId = p.parentId AND ps.studentId = @studentId);
-        DELETE FROM PendingParentStudentLinks WHERE LOWER(studentEmail) = @email;`, { email, studentId }, tx);
+        DELETE FROM PendingParentStudentLinks WHERE studentEmail = @email;`, { email, studentId }, tx);
     });
   }
 
@@ -776,7 +814,7 @@ export class SqlRepository {
     return rows.map(r => this.mapRelease(r, 'Unknown Staff'));
   }
 
-  async createParkingReleases(ownerUserId: string, space: number, dates: string[], tx?: sql.Transaction): Promise<Types.ParkingRelease[]> {
+  async createParkingReleases(ownerUserId: string, space: number, dates: string[], absenceRequestId: number | null = null, tx?: sql.Transaction): Promise<Types.ParkingRelease[]> {
     const work = async (t: sql.Transaction) => {
       const overlap = await query(`
         SELECT TOP 1 [date] FROM ParkingReleases
@@ -784,23 +822,23 @@ export class SqlRepository {
         ORDER BY [date]`, { ownerUserId, dates: JSON.stringify(dates) }, t);
       if (overlap[0]) throw new Error(`OVERLAPPING_RELEASE:${overlap[0].date}`);
 
-      const created: Types.ParkingRelease[] = [];
-      for (const date of dates) {
-        const inserted = await query(`
-          INSERT INTO ParkingReleases (ownerUserId, space, [date])
-          OUTPUT INSERTED.* VALUES (@ownerUserId, @space, @date)`, { ownerUserId, space, date }, t);
-        const r = inserted[0];
-        created.push({
+      const inserted = await query(`
+        INSERT INTO ParkingReleases (ownerUserId, space, [date], absenceRequestId)
+        OUTPUT INSERTED.*
+        SELECT DISTINCT @ownerUserId, @space, value, @absenceRequestId FROM OPENJSON(@dates)`,
+        { ownerUserId, space, dates: JSON.stringify(dates), absenceRequestId }, t);
+      return inserted
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(r => ({
           id: r.id,
           ownerUserId: r.ownerUserId,
           space: r.space,
           date: r.date,
           reserverUserId: null,
           reservedAt: null,
+          absenceRequestId: r.absenceRequestId ?? null,
           createdAt: iso(r.createdAt),
-        });
-      }
-      return created;
+        }));
     };
     return tx ? work(tx) : inTransaction(work);
   }
@@ -853,52 +891,41 @@ export class SqlRepository {
 
   async createAbsenceRequest(staffUserId: string, startDate: string, endDate: string, reason: string, releaseSpace: boolean): Promise<Types.AbsenceRequest> {
     const staff = await this.getStaffById(staffUserId);
+    const space = releaseSpace && staff?.parkingSpace ? staff.parkingSpace : null;
     return inTransaction(async tx => {
-      let parkingReleaseIdsStr: string | null = null;
-      if (releaseSpace && staff?.parkingSpace && staff.parkingSpace !== 999) {
-        const weekdays = getWeekdaysBetween(startDate, endDate);
-        if (weekdays.length > 0) {
-          const createdReleases = await this.createParkingReleases(staffUserId, staff.parkingSpace, weekdays, tx);
-          parkingReleaseIdsStr = createdReleases.map(r => r.id).join(',');
-        }
-      }
-
       const inserted = await query(`
-        INSERT INTO AbsenceRequests (staffUserId, startDate, endDate, reason, releasedSpace, parkingReleaseIds)
-        OUTPUT INSERTED.* VALUES (@staffUserId, @startDate, @endDate, @reason, @releasedSpace, @parkingReleaseIds)`, {
+        INSERT INTO AbsenceRequests (staffUserId, startDate, endDate, reason, releasedSpace)
+        OUTPUT INSERTED.* VALUES (@staffUserId, @startDate, @endDate, @reason, @releasedSpace)`, {
         staffUserId,
         startDate,
         endDate,
         reason: reason.trim(),
-        releasedSpace: releaseSpace && staff?.parkingSpace ? staff.parkingSpace : null,
-        parkingReleaseIds: parkingReleaseIdsStr,
+        releasedSpace: space,
       }, tx);
-      return this.mapAbsence(inserted[0]);
+      const absence = this.mapAbsence(inserted[0]);
+      if (space && space !== 999) {
+        const weekdays = getWeekdaysBetween(startDate, endDate);
+        if (weekdays.length > 0) {
+          await this.createParkingReleases(staffUserId, space, weekdays, absence.id, tx);
+        }
+      }
+      return absence;
     });
   }
 
   async cancelAbsenceRequest(id: number, staffUserId: string): Promise<boolean> {
-    const rows = await query('SELECT * FROM AbsenceRequests WHERE id = @id', { id });
+    const rows = await query('SELECT id, staffUserId FROM AbsenceRequests WHERE id = @id', { id });
     const absence = rows[0];
     if (!absence) throw new Error('NOT_FOUND');
     if (absence.staffUserId !== staffUserId) throw new Error('FORBIDDEN');
 
-    await inTransaction(async tx => {
-      if (absence.parkingReleaseIds) {
-        const releaseIds = String(absence.parkingReleaseIds).split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-        if (releaseIds.length) {
-          // Only unreserved releases are withdrawn; reserved ones stay with their reserver.
-          await execute(`
-            DELETE FROM ParkingReleases
-            WHERE reserverUserId IS NULL AND id IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))`,
-            { ids: JSON.stringify(releaseIds) }, tx);
-        }
-      }
-      await execute('DELETE FROM AbsenceRequests WHERE id = @id', { id }, tx);
-    });
+    // Unreserved releases are withdrawn; reserved ones stay with their reserver (detached from the absence).
+    await inTransaction(tx => execute(`
+      DELETE FROM ParkingReleases WHERE absenceRequestId = @id AND reserverUserId IS NULL;
+      UPDATE ParkingReleases SET absenceRequestId = NULL WHERE absenceRequestId = @id;
+      DELETE FROM AbsenceRequests WHERE id = @id;`, { id }, tx));
     return true;
   }
-
   // -------------------------------------------------------------
   // Streams
   // -------------------------------------------------------------
@@ -947,10 +974,13 @@ export class SqlRepository {
   // Branding & Content (single-row tables, id = 1)
   // -------------------------------------------------------------
   private async getSingleton<T>(table: string, columns: string[]): Promise<T> {
-    // Column defaults in schema.sql supply the initial values if the row is missing.
-    const rows = await query(`
-      IF NOT EXISTS (SELECT 1 FROM ${table} WHERE id = 1) INSERT INTO ${table} (id) VALUES (1);
-      SELECT * FROM ${table} WHERE id = 1;`);
+    let rows = await query(`SELECT * FROM ${table} WHERE id = 1`);
+    if (!rows[0]) {
+      // schema.sql seeds the row; column defaults supply the values if it was deleted since.
+      rows = await query(`
+        IF NOT EXISTS (SELECT 1 FROM ${table} WHERE id = 1) INSERT INTO ${table} (id) VALUES (1);
+        SELECT * FROM ${table} WHERE id = 1;`);
+    }
     const r = rows[0];
     const result: any = { id: 1, updatedAt: iso(r.updatedAt) };
     for (const col of columns) result[col] = r[col] ?? null;
@@ -958,12 +988,13 @@ export class SqlRepository {
   }
 
   private async updateSingleton<T>(table: string, columns: string[], data: Record<string, unknown>): Promise<T> {
-    await this.getSingleton<T>(table, columns);
     const provided = columns.filter(c => data[c] !== undefined);
     if (provided.length) {
       const params: Params = {};
       for (const c of provided) params[c] = data[c];
-      await execute(`UPDATE ${table} SET ${provided.map(c => `${c} = @${c}`).join(', ')}, updatedAt = SYSUTCDATETIME() WHERE id = 1`, params);
+      await execute(`
+        IF NOT EXISTS (SELECT 1 FROM ${table} WHERE id = 1) INSERT INTO ${table} (id) VALUES (1);
+        UPDATE ${table} SET ${provided.map(c => `${c} = @${c}`).join(', ')}, updatedAt = SYSUTCDATETIME() WHERE id = 1;`, params);
     }
     return this.getSingleton<T>(table, columns);
   }

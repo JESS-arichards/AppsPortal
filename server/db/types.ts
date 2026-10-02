@@ -99,6 +99,7 @@ export interface ParkingRelease {
   date: string; // YYYY-MM-DD
   reserverUserId?: string | null;
   reservedAt?: string | null;
+  absenceRequestId?: number | null;
   createdAt?: string;
   ownerName?: string;
   reserverName?: string;
@@ -111,7 +112,6 @@ export interface AbsenceRequest {
   endDate: string; // YYYY-MM-DD
   reason: string;
   releasedSpace?: number | null;
-  parkingReleaseIds?: string | null; // comma-separated
   createdAt?: string;
 }
 
@@ -137,10 +137,8 @@ export interface PortalBranding {
   textColor: string;
   navBgColor?: string | null;
   navTextColor?: string | null;
-  navAccentColor?: string | null;
   heroBgColor?: string | null;
   heroTextColor?: string | null;
-  heroAccentColor?: string | null;
   navLogo?: string | null;
   favicon?: string | null;
   updatedAt?: string;
@@ -163,9 +161,8 @@ export interface PortalHomeContent {
 
 export interface PortalLoginContent {
   id: number;
-  welcomeLabel: string;
   welcomeHeadline: string;
-  valuesJson: string; // JSON array of { text, icon } (legacy rows: string[])
+  valuesJson: string; // JSON array of { text, icon }
   signInHeading: string;
   signInIntro: string;
   staffChoiceTitle: string;

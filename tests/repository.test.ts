@@ -66,6 +66,40 @@ describe('Data Repository Operations', () => {
 
     const overview = await repository.getAbsenceOverview('staff-teacher-1');
     expect(overview.requests.some(a => a.id === absence.id)).toBe(true);
+
+    const linked = (await repository.getAllParkingReleases()).filter(r => r.absenceRequestId === absence.id);
+    expect(linked.map(r => r.date)).toEqual(
+      new Date(dateStr).getUTCDay() % 6 === 0 ? [] : [dateStr],
+    );
+  });
+
+  it('cancelling an absence withdraws unreserved releases and keeps reserved ones', async () => {
+    const start = new Date();
+    start.setUTCDate(start.getUTCDate() + 30);
+    while (start.getUTCDay() !== 1) start.setUTCDate(start.getUTCDate() + 1); // next Monday a month out
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 4);
+    const [startStr, endStr] = [start, end].map(d => d.toISOString().slice(0, 10));
+
+    const absence = await repository.createAbsenceRequest('staff-teacher-1', startStr, endStr, 'Training', true);
+    const releases = (await repository.getAllParkingReleases()).filter(r => r.absenceRequestId === absence.id);
+    expect(releases).toHaveLength(5);
+
+    await repository.reserveParkingRelease(releases[2].id, 'dev-staff-2');
+    await repository.cancelAbsenceRequest(absence.id, 'staff-teacher-1');
+
+    const remaining = (await repository.getAllParkingReleases()).filter(r => releases.some(x => x.id === r.id));
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(releases[2].id);
+    expect(remaining[0].absenceRequestId).toBeNull();
+  });
+
+  it('keeps only the latest parent login code per address', async () => {
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
+    await repository.saveParentLoginCode('codes@example.com', 'first', expires);
+    await repository.saveParentLoginCode('codes@example.com', 'second', expires);
+    expect(memoryStore.parentLoginCodes.filter(c => c.email === 'codes@example.com')).toHaveLength(1);
+    expect((await repository.getLatestParentLoginCode('codes@example.com'))?.codeHash).toBe('second');
   });
 
   it('resolves pending parent links upon student registration', async () => {

@@ -15,10 +15,8 @@ const defaultBranding: Branding = {
   textColor: '#212529',
   navBgColor: null,
   navTextColor: null,
-  navAccentColor: null,
   heroBgColor: null,
   heroTextColor: null,
-  heroAccentColor: null,
   navLogo: null,
   favicon: null,
 };
@@ -43,7 +41,7 @@ export const BrandingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const navBg = b.navBgColor || b.mainColor;
     const navText = b.navTextColor || '#FFFFFF';
-    const navAccent = b.navAccentColor || b.accentColor;
+    const navAccent = b.accentColor;
 
     root.style.setProperty('--nav-bg', navBg);
     root.style.setProperty('--nav-text', navText);
@@ -51,7 +49,7 @@ export const BrandingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const heroBg = b.heroBgColor || b.mainColor;
     const heroText = b.heroTextColor || '#FFFFFF';
-    const heroAccent = b.heroAccentColor || b.accentColor;
+    const heroAccent = b.accentColor;
 
     root.style.setProperty('--hero-bg', heroBg);
     root.style.setProperty('--hero-text', heroText);

@@ -108,32 +108,27 @@ As requested, an architectural assessment was conducted evaluating **React with 
 
 ---
 
-## 4. Azure SQL Database Setup & Migrations
+## 4. Azure SQL Database Setup
 
-The database layer provides a single consolidated SQL definition in [`database/schema.sql`](/D:/GitHub/PortalApplications/database/schema.sql) as well as modular migration scripts in `database/migrations/`.
+The whole database structure lives in one idempotent script, [`database/schema.sql`](database/schema.sql). The server runs it on every start, so missing tables are created automatically. There is no separate migration runner.
 
-### Single Consolidated Database Query
-To establish the entire schema in Azure SQL (or SQL Server Management Studio / Azure Data Studio / Azure Portal Query Editor), execute the consolidated script:
-- [`database/schema.sql`](/D:/GitHub/PortalApplications/database/schema.sql)
+### Tables (18)
+1. `Users`: staff, students and parents in one table, keyed by `userType`. Email is unique per user type, so a staff member can also be a parent.
+2. `UserRoles`, `UserAdminSections`: staff roles and delegated admin sections.
+3. `ParentLoginCodes`, `ParentStudents`, `PendingParentStudentLinks`: parent one-time codes and parent/student links. Superseded and expired codes are purged when a new code is issued.
+4. `Classes`, `UserClasses`, `LessonPeriods`: classes, staff/student class membership and the timetable.
+5. `DistanceLessons`, `DistanceLessonResources`: distance learning.
+6. `AbsenceRequests`, `ParkingReleases`: staff absence and the parking pool. A release created by an absence references it through `absenceRequestId`.
+7. `Streams`: the live and on-demand video catalogue.
+8. `PortalBranding`, `PortalHomeContent`, `PortalLoginContent`: single-row branding and page content.
+9. `AdminImpersonationAudit`: the impersonation audit log.
 
-This single query creates all core tables, relationships, foreign keys, clustered & non-clustered indexes, single-row singleton check constraints, and seed content in correct topological dependency order:
-1. `__SchemaMigrations` (Migration history & deployment tracking)
-2. `StaffUsers`, `StudentUsers`, `ParentUsers` (Root user identity entities)
-3. `StaffUserRoles`, `ParentLoginCodes`, `ParentStudents`, `PendingParentStudentLinks` (Security, linking & OTP verification)
-4. `Classes`, `StaffClasses`, `StudentClasses`, `LessonPeriods` (Academic schedule & timetable structures)
-5. `DistanceLessons`, `DistanceLessonResources` (Distance learning orchestration)
-6. `ParkingReleases`, `AbsenceRequests` (Staff parking pool allocation & absence reporting)
-7. `Streams` (Live and on-demand video streaming catalogue)
-8. `PortalBranding`, `PortalHomeContent`, `PortalLoginContent` (Institution branding with WCAG contrast and home/login CMS)
-9. `StaffAdminTabPermissions`, `AdminImpersonationAudit` (Delegated administration & immutable impersonation logging)
-
-### Migration Runner
-Run database migrations using the TypeScript migration runner, which automatically applies the consolidated schema:
-Run database migrations using TypeScript migration runner:
+### Resetting a Database
+Schema changes are not migrated in place. To rebuild a development database from scratch, deleting **all data**:
 ```bash
-# Execute migrations against target Azure SQL database
-npm run db:migrate
+npm run db:reset
 ```
+This runs [`database/reset.sql`](database/reset.sql), which drops every portal table including legacy ones, and then `schema.sql`. It refuses to run when `NODE_ENV=production`. You can also paste the two scripts into the Azure Portal query editor. If the server finds the old pre-consolidation tables (`StaffUsers`, ...), it stops at startup and asks you to run `db:reset`.
 
 ### Dual-Mode Database Architecture
 The database layer (`server/db/index.ts`, `server/db/repository.ts`, `server/db/sqlRepository.ts`) runs in one of two modes:
@@ -141,7 +136,7 @@ The database layer (`server/db/index.ts`, `server/db/repository.ts`, `server/db/
 - **In-Memory Mode (local development/tests only):** When no SQL connection is configured, the application uses an in-memory repository pre-seeded with demo staff, student and parent accounts, campus lesson periods and mock streams. Nothing is persisted, and demo accounts never exist in SQL.
 
 ### First Administrator
-A new SQL database has no administrators. Set `INITIAL_ADMIN_EMAILS` to one or more staff emails; when those users sign in with Entra they are granted the `Admin` role (stored in `StaffUserRoles`). Roles are never removed by this setting, so it can be cleared once an admin exists.
+A new SQL database has no administrators. Set `INITIAL_ADMIN_EMAILS` to one or more staff emails; when those users sign in with Entra they are granted the `Admin` role (stored in `UserRoles`). Roles are never removed by this setting, so it can be cleared once an admin exists.
 
 ---
 

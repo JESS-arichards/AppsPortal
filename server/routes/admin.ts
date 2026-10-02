@@ -678,7 +678,7 @@ adminRouter.delete('/streams/:id', requireAdmin('streaming'), async (req: Reques
 // PUT /api/admin/branding
 adminRouter.put('/branding', requireAdmin('branding'), async (req: Request, res: Response) => {
   try {
-    const { mainColor, accentColor, textColor, navBgColor, navTextColor, navAccentColor, heroBgColor, heroTextColor, heroAccentColor, navLogo, favicon } = req.body;
+    const { mainColor, accentColor, textColor, navBgColor, navTextColor, heroBgColor, heroTextColor, navLogo, favicon } = req.body;
 
     const hexRegex = /^#[0-9A-Fa-f]{6}$/;
     if (!mainColor || !hexRegex.test(mainColor) || !accentColor || !hexRegex.test(accentColor) || !textColor || !hexRegex.test(textColor)) {
@@ -708,10 +708,8 @@ adminRouter.put('/branding', requireAdmin('branding'), async (req: Request, res:
       textColor,
       navBgColor: navBgColor || null,
       navTextColor: navTextColor || null,
-      navAccentColor: navAccentColor || null,
       heroBgColor: heroBgColor || null,
       heroTextColor: heroTextColor || null,
-      heroAccentColor: heroAccentColor || null,
       navLogo: navLogo || null,
       favicon: favicon || null,
     });
@@ -755,7 +753,6 @@ adminRouter.put('/home-content', requireAdmin('branding'), async (req: Request, 
 adminRouter.put('/login-content', requireAdmin('branding'), async (req: Request, res: Response) => {
   try {
     const {
-      welcomeLabel,
       welcomeHeadline,
       values,
       signInHeading,
@@ -799,7 +796,6 @@ adminRouter.put('/login-content', requireAdmin('branding'), async (req: Request,
     }
 
     const updated = await repository.updateLoginContent({
-      welcomeLabel: (welcomeLabel || '').substring(0, 120),
       welcomeHeadline: (welcomeHeadline || '').substring(0, 200),
       valuesJson,
       signInHeading: (signInHeading || '').substring(0, 200),

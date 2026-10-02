@@ -38,10 +38,8 @@ export interface Branding {
   textColor: string;
   navBgColor?: string | null;
   navTextColor?: string | null;
-  navAccentColor?: string | null;
   heroBgColor?: string | null;
   heroTextColor?: string | null;
-  heroAccentColor?: string | null;
   navLogo?: string | null;
   favicon?: string | null;
   updatedAt?: string;
@@ -69,9 +67,8 @@ export interface CoreValue {
 
 export interface LoginContent {
   id: number;
-  welcomeLabel: string;
   welcomeHeadline: string;
-  valuesJson: string; // JSON array of CoreValue (legacy: string[])
+  valuesJson: string; // JSON array of CoreValue
   signInHeading: string;
   signInIntro: string;
   staffChoiceTitle: string;
@@ -143,7 +140,6 @@ export interface AbsenceRequest {
   endDate: string;
   reason: string;
   releasedSpace?: number | null;
-  parkingReleaseIds?: string | null;
   createdAt?: string;
 }
 

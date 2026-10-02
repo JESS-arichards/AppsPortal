@@ -218,8 +218,12 @@ export class MemoryRepository {
   // Parent Login Codes
   // -------------------------------------------------------------
   async saveParentLoginCode(email: string, codeHash: string, expiresAt: Date): Promise<void> {
+    const normalized = email.toLowerCase().trim();
+    const now = new Date();
+    // Issuing a new code supersedes older ones for the address; expired codes are purged on the way.
+    memoryStore.parentLoginCodes = memoryStore.parentLoginCodes.filter(c => c.email !== normalized && c.expiresAt >= now);
     memoryStore.parentLoginCodes.push({
-      email: email.toLowerCase().trim(),
+      email: normalized,
       codeHash,
       attempts: 0,
       expiresAt,
@@ -495,7 +499,7 @@ export class MemoryRepository {
     return list.sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  async createParkingReleases(ownerUserId: string, space: number, dates: string[]): Promise<Types.ParkingRelease[]> {
+  async createParkingReleases(ownerUserId: string, space: number, dates: string[], absenceRequestId: number | null = null): Promise<Types.ParkingRelease[]> {
     // Check for duplicate date releases by this owner
     for (const date of dates) {
       for (const existing of memoryStore.parkingReleases.values()) {
@@ -506,7 +510,7 @@ export class MemoryRepository {
     }
 
     const created: Types.ParkingRelease[] = [];
-    for (const date of dates) {
+    for (const date of [...new Set(dates)].sort()) {
       const id = memoryStore.nextParkingId++;
       const release: Types.ParkingRelease = {
         id,
@@ -515,6 +519,7 @@ export class MemoryRepository {
         date,
         reserverUserId: null,
         reservedAt: null,
+        absenceRequestId,
         createdAt: new Date().toISOString(),
       };
       memoryStore.parkingReleases.set(id, release);
@@ -575,26 +580,21 @@ export class MemoryRepository {
 
   async createAbsenceRequest(staffUserId: string, startDate: string, endDate: string, reason: string, releaseSpace: boolean): Promise<Types.AbsenceRequest> {
     const staff = memoryStore.staffUsers.get(staffUserId);
-    let parkingReleaseIdsStr: string | null = null;
+    const space = releaseSpace && staff?.parkingSpace ? staff.parkingSpace : null;
+    const weekdays = space && space !== 999 ? getWeekdaysBetween(startDate, endDate) : [];
+    const id = memoryStore.nextAbsenceId++;
 
-    if (releaseSpace && staff?.parkingSpace && staff.parkingSpace !== 999) {
-      // Calculate weekdays between startDate and endDate
-      const weekdays = getWeekdaysBetween(startDate, endDate);
-      if (weekdays.length > 0) {
-        const createdReleases = await this.createParkingReleases(staffUserId, staff.parkingSpace, weekdays);
-        parkingReleaseIdsStr = createdReleases.map(r => r.id).join(',');
-      }
+    if (space && weekdays.length > 0) {
+      await this.createParkingReleases(staffUserId, space, weekdays, id);
     }
 
-    const id = memoryStore.nextAbsenceId++;
     const absence: Types.AbsenceRequest = {
       id,
       staffUserId,
       startDate,
       endDate,
       reason: reason.trim(),
-      releasedSpace: releaseSpace && staff?.parkingSpace ? staff.parkingSpace : null,
-      parkingReleaseIds: parkingReleaseIdsStr,
+      releasedSpace: space,
       createdAt: new Date().toISOString(),
     };
     memoryStore.absenceRequests.set(id, absence);
@@ -606,15 +606,11 @@ export class MemoryRepository {
     if (!absence) throw new Error('NOT_FOUND');
     if (absence.staffUserId !== staffUserId) throw new Error('FORBIDDEN');
 
-    // Delete associated unreserved parking releases
-    if (absence.parkingReleaseIds) {
-      const releaseIds = absence.parkingReleaseIds.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-      for (const relId of releaseIds) {
-        const rel = memoryStore.parkingReleases.get(relId);
-        if (rel && !rel.reserverUserId) {
-          memoryStore.parkingReleases.delete(relId);
-        }
-      }
+    // Unreserved releases are withdrawn; reserved ones stay with their reserver (detached from the absence).
+    for (const [relId, rel] of memoryStore.parkingReleases) {
+      if (rel.absenceRequestId !== id) continue;
+      if (rel.reserverUserId) rel.absenceRequestId = null;
+      else memoryStore.parkingReleases.delete(relId);
     }
 
     memoryStore.absenceRequests.delete(id);
