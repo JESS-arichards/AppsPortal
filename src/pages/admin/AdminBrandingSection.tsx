@@ -140,7 +140,9 @@ export const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<voi
     }
 
     try {
-      await api.put('/api/admin/branding', brandingData);
+      // Store the server's copy so images become short media URLs that later saves echo back.
+      const res = await api.put<{ branding: Branding }>('/api/admin/branding', brandingData);
+      setBrandingData(res.branding);
       setSuccess('Portal branding saved.');
       await refreshBranding();
     } catch (err: any) {
@@ -154,7 +156,8 @@ export const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<voi
     setError(null);
     setSuccess(null);
     try {
-      await api.put('/api/admin/home-content', homeData);
+      const res = await api.put<{ content: HomeContent }>('/api/admin/home-content', homeData);
+      setHomeData(res.content);
       setSuccess('Home page content saved.');
     } catch (err: any) {
       setError(err.message || 'Failed to save home content');
