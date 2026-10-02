@@ -79,6 +79,8 @@ export class MemoryStore {
   nextStreamId = 1;
   nextPendingLinkId = 1;
   nextAuditId = 1;
+  nextLessonId = 1;
+  nextResourceId = 1;
 
   constructor() {
     this.seedDefaultData();

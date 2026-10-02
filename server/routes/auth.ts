@@ -261,8 +261,8 @@ authRouter.post('/users/me/picture', requireAuth, async (req: Request, res: Resp
       return;
     }
 
-    await repository.updateUserProfilePicture(req.user!.userType, req.user!.id, image);
-    res.json({ profilePicture: image });
+    const profilePicture = await repository.updateUserProfilePicture(req.user!.userType, req.user!.id, image);
+    res.json({ profilePicture });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to save profile picture' });
   }

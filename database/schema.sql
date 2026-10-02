@@ -32,7 +32,7 @@ BEGIN
         jobTitle NVARCHAR(256) NULL, -- staff only
         division NVARCHAR(128) NULL,
         department NVARCHAR(128) NULL, -- staff & students
-        profilePicture NVARCHAR(MAX) NULL, -- base64 data URL, served via /api/auth/users/:id/picture
+        profilePicture NVARCHAR(MAX) NULL, -- base64 data URL, served via /api/media/users/:id/picture
         parkingSpace INT NULL, -- staff only
         extension INT NULL, -- staff only
         misId NVARCHAR(64) NULL, -- staff only (Entra employeeId)
@@ -190,7 +190,7 @@ BEGIN
         lessonId INT NOT NULL,
         label NVARCHAR(200) NOT NULL,
         url NVARCHAR(1000) NULL,
-        fileData NVARCHAR(MAX) NULL, -- base64 data URL, served via /api/distance-learning/resources/:id/file
+        fileData NVARCHAR(MAX) NULL, -- base64 data URL, served via /api/media/lesson-resources/:id/file
         fileName NVARCHAR(255) NULL,
         mimeType NVARCHAR(100) NULL,
         sortOrder INT NOT NULL DEFAULT 0,

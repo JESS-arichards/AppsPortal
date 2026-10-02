@@ -142,7 +142,7 @@ export const DistanceLearningPage: React.FC = () => {
         setModalError('Every resource must have a label.');
         return;
       }
-      if (!r.url && !r.fileData) {
+      if (!r.url && !r.fileData && !r.hasFile) {
         setModalError('Every resource must include either a URL or an attached file.');
         return;
       }
@@ -296,9 +296,9 @@ export const DistanceLearningPage: React.FC = () => {
                               >
                                 🔗 {res.label}
                               </a>
-                            ) : res.fileData ? (
+                            ) : res.fileUrl ? (
                               <a
-                                href={res.fileData}
+                                href={res.fileUrl}
                                 download={res.fileName || 'resource-file'}
                                 className="resource-link"
                               >

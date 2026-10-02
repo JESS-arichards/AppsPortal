@@ -73,10 +73,13 @@ export interface DistanceLessonResource {
   lessonId?: number;
   label: string;
   url?: string | null;
+  /** Data URL; only sent by clients when uploading. Responses expose `hasFile`/`fileUrl` instead. */
   fileData?: string | null;
   fileName?: string | null;
   mimeType?: string | null;
   sortOrder?: number;
+  hasFile?: boolean;
+  fileUrl?: string | null;
 }
 
 export interface DistanceLesson {

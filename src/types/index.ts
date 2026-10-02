@@ -105,10 +105,14 @@ export interface DistanceLessonResource {
   lessonId?: number;
   label: string;
   url?: string | null;
+  /** Data URL of a newly attached file (upload only; never returned by the API). */
   fileData?: string | null;
   fileName?: string | null;
   mimeType?: string | null;
   sortOrder?: number;
+  /** True when a file is stored for this resource; download it from `fileUrl`. */
+  hasFile?: boolean;
+  fileUrl?: string | null;
 }
 
 export interface DistanceLesson {

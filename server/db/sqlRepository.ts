@@ -2,6 +2,7 @@ import sql from 'mssql';
 import { getPool } from './index.js';
 import * as Types from './types.js';
 import { getWeekdaysBetween } from './dates.js';
+import { MediaKind, MediaRecord, isDataUrl, mediaUrl, presentResource } from './media.js';
 
 type Params = Record<string, unknown>;
 
@@ -88,6 +89,52 @@ function withoutUndefined<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
+/**
+ * Selects a media column without transferring stored data URLs: the value comes back null with
+ * `<alias>IsData = 1` when a data URL is stored, otherwise the stored value (e.g. an external URL).
+ */
+function leanMedia(column: string, alias: string): string {
+  return `CASE WHEN ${column} LIKE 'data:%' THEN NULL ELSE ${column} END AS ${alias},
+    CASE WHEN ${column} LIKE 'data:%' THEN 1 ELSE 0 END AS ${alias}IsData`;
+}
+
+function mediaValue(row: any, alias: string, url: () => string): string | null {
+  return Number(row[`${alias}IsData`]) === 1 || isDataUrl(row[alias]) ? url() : row[alias] ?? null;
+}
+
+/**
+ * SQL fragment for a media write: a media URL parameter (the client echoing back what it was given)
+ * keeps the stored value, anything else replaces it.
+ */
+function mediaAssignment(column: string, param = column): string {
+  return `${column} = CASE WHEN @${param} LIKE '/api/media/%' THEN ${column} ELSE @${param} END`;
+}
+
+const USER_SELECT = `u.id, u.userType, u.email, u.displayName, u.forename, u.surname, u.authType, u.jobTitle, u.division,
+  u.department, u.parkingSpace, u.extension, u.misId, u.createdAt, u.updatedAt, ${leanMedia('u.profilePicture', 'profilePicture')}`;
+
+const STREAM_SELECT = `id, title, description, categories, streamType, accessType, videoUrl, active, createdBy, createdAt, updatedAt,
+  ${leanMedia('thumbnailUrl', 'thumbnailUrl')}`;
+
+/** Cached by-id user lookups. Auth loads the user on every request; any user/link/class write clears it. */
+const USER_CACHE_TTL_MS = 15_000;
+const userCache = new Map<string, { expires: number; value: unknown }>();
+
+async function cachedUser<T>(key: string, load: () => Promise<T | null>): Promise<T | null> {
+  const hit = userCache.get(key);
+  if (hit && hit.expires > Date.now()) return structuredClone(hit.value) as T;
+  const value = await load();
+  if (value) {
+    if (userCache.size >= 1000) userCache.clear();
+    userCache.set(key, { expires: Date.now() + USER_CACHE_TTL_MS, value: structuredClone(value) });
+  }
+  return value;
+}
+
+function invalidateUsers(): void {
+  userCache.clear();
+}
+
 const RELEASE_SELECT = `
   SELECT r.id, r.ownerUserId, r.space, r.[date], r.reserverUserId, r.reservedAt, r.absenceRequestId, r.createdAt,
          o.displayName AS ownerName, v.displayName AS reserverName
@@ -98,6 +145,13 @@ const RELEASE_SELECT = `
 const BRANDING_COLUMNS = ['mainColor', 'accentColor', 'textColor', 'navBgColor', 'navTextColor', 'heroBgColor', 'heroTextColor', 'navLogo', 'favicon'];
 const HOME_COLUMNS = ['heroLabel', 'heroHeadline', 'heroIntro', 'heroImage', 'heroImageAlt', 'captionName', 'captionRole', 'welcomeLabel', 'welcomeHeading', 'welcomeMessage'];
 const LOGIN_COLUMNS = ['welcomeHeadline', 'valuesJson', 'signInHeading', 'signInIntro', 'staffChoiceTitle', 'staffChoiceDescription', 'parentChoiceTitle', 'parentChoiceDescription', 'parentEmailLabel', 'parentCodeLabel', 'sendCodeLabel', 'verifyCodeLabel', 'resendCodeLabel', 'helpPrompt', 'helpLinkText'];
+
+/** Media columns of the single-row tables, with the URL each is served from. */
+const SINGLETON_MEDIA: Record<string, Record<string, (updatedAt?: string) => string>> = {
+  PortalBranding: { navLogo: mediaUrl.navLogo, favicon: mediaUrl.favicon },
+  PortalHomeContent: { heroImage: mediaUrl.heroImage },
+  PortalLoginContent: {},
+};
 
 type UserType = 'Staff' | 'Student' | 'Parent';
 
@@ -124,7 +178,7 @@ export class SqlRepository {
       jobTitle: r.jobTitle ?? null,
       division: r.division ?? null,
       department: r.department ?? null,
-      profilePicture: r.profilePicture ?? null,
+      profilePicture: mediaValue(r, 'profilePicture', () => mediaUrl.userPicture(r.id, iso(r.updatedAt))),
       parkingSpace: r.parkingSpace ?? null,
       extension: r.extension ?? null,
       misId: r.misId ?? null,
@@ -146,7 +200,7 @@ export class SqlRepository {
       authType: 'Entra',
       division: r.division ?? null,
       department: r.department ?? null,
-      profilePicture: r.profilePicture ?? null,
+      profilePicture: mediaValue(r, 'profilePicture', () => mediaUrl.userPicture(r.id, iso(r.updatedAt))),
       createdAt: iso(r.createdAt),
       updatedAt: iso(r.updatedAt),
       classes,
@@ -162,7 +216,7 @@ export class SqlRepository {
       surname: r.surname ?? null,
       authType: 'Local',
       division: r.division ?? null,
-      profilePicture: r.profilePicture ?? null,
+      profilePicture: mediaValue(r, 'profilePicture', () => mediaUrl.userPicture(r.id, iso(r.updatedAt))),
       createdAt: iso(r.createdAt),
       updatedAt: iso(r.updatedAt),
     };
@@ -192,7 +246,7 @@ export class SqlRepository {
       streamType: r.streamType,
       accessType: r.accessType,
       videoUrl: r.videoUrl,
-      thumbnailUrl: r.thumbnailUrl ?? null,
+      thumbnailUrl: mediaValue(r, 'thumbnailUrl', () => mediaUrl.streamThumbnail(r.id, iso(r.updatedAt))),
       active: !!r.active,
       createdBy: r.createdBy ?? null,
       createdAt: iso(r.createdAt),
@@ -227,7 +281,7 @@ export class SqlRepository {
     const sets = await queryMulti(`
       DECLARE @ids TABLE (id NVARCHAR(128) PRIMARY KEY);
       INSERT INTO @ids (id) SELECT id FROM Users WHERE userType = @userType AND (${filter});
-      SELECT u.* FROM Users u JOIN @ids i ON i.id = u.id ORDER BY u.displayName;
+      SELECT ${USER_SELECT} FROM Users u JOIN @ids i ON i.id = u.id ORDER BY u.displayName;
       ${extras}`, { ...params, userType }, tx);
     const rows = sets[0] || [];
     const empty = new Map<string, string[]>();
@@ -274,11 +328,12 @@ export class SqlRepository {
       IF EXISTS (SELECT 1 FROM Users WHERE id = @id)
         UPDATE Users SET email = @email, displayName = @displayName, forename = @forename, surname = @surname,
           authType = @authType, jobTitle = @jobTitle, division = @division, department = @department,
-          profilePicture = @profilePicture, parkingSpace = @parkingSpace, extension = @extension, misId = @misId, updatedAt = SYSUTCDATETIME()
+          ${mediaAssignment('profilePicture')}, parkingSpace = @parkingSpace, extension = @extension, misId = @misId, updatedAt = SYSUTCDATETIME()
         WHERE id = @id AND userType = @userType;
       ELSE
         INSERT INTO Users (id, userType, email, displayName, forename, surname, authType, jobTitle, division, department, profilePicture, parkingSpace, extension, misId)
-        VALUES (@id, @userType, @email, @displayName, @forename, @surname, @authType, @jobTitle, @division, @department, @profilePicture, @parkingSpace, @extension, @misId);`];
+        VALUES (@id, @userType, @email, @displayName, @forename, @surname, @authType, @jobTitle, @division, @department,
+          CASE WHEN @profilePicture LIKE '/api/media/%' THEN NULL ELSE @profilePicture END, @parkingSpace, @extension, @misId);`];
     if (lists.roles) {
       statements.push(`
         DELETE FROM UserRoles WHERE userId = @id;
@@ -296,6 +351,7 @@ export class SqlRepository {
         INSERT INTO UserAdminSections (userId, section) SELECT DISTINCT @id, value FROM OPENJSON(@sections);`);
     }
     await execute(statements.join('\n'), params, tx);
+    invalidateUsers();
   }
 
   private saveStaff(u: Types.StaffUser, tx: sql.Transaction): Promise<void> {
@@ -310,7 +366,7 @@ export class SqlRepository {
   // Users & Roles
   // -------------------------------------------------------------
   async getStaffById(id: string): Promise<Types.StaffUser | null> {
-    return (await this.loadStaff('id = @id', { id }))[0] || null;
+    return cachedUser(`Staff:${id}`, async () => (await this.loadStaff('id = @id', { id }))[0] || null);
   }
 
   async getStaffByEmail(email: string): Promise<Types.StaffUser | null> {
@@ -318,7 +374,7 @@ export class SqlRepository {
   }
 
   async getStudentById(id: string): Promise<Types.StudentUser | null> {
-    return (await this.loadStudents('id = @id', { id }))[0] || null;
+    return cachedUser(`Student:${id}`, async () => (await this.loadStudents('id = @id', { id }))[0] || null);
   }
 
   async getStudentByEmail(email: string): Promise<Types.StudentUser | null> {
@@ -326,9 +382,11 @@ export class SqlRepository {
   }
 
   async getParentById(id: string): Promise<Types.ParentUser | null> {
-    const parent = (await this.loadParents('id = @id', { id }))[0];
-    if (!parent) return null;
-    return { ...parent, linkedStudents: await this.getParentStudents(id) };
+    return cachedUser(`Parent:${id}`, async () => {
+      const parent = (await this.loadParents('id = @id', { id }))[0];
+      if (!parent) return null;
+      return { ...parent, linkedStudents: await this.getParentStudents(id) };
+    });
   }
 
   async getParentByEmail(email: string): Promise<Types.ParentUser | null> {
@@ -398,6 +456,7 @@ export class SqlRepository {
         forename: userData.forename?.trim() || null,
         surname: userData.surname?.trim() || null,
       });
+      invalidateUsers();
     } catch (err) {
       if (isUniqueViolation(err)) throw new Error('DUPLICATE_EMAIL');
       throw err;
@@ -471,7 +530,7 @@ export class SqlRepository {
     try {
       await execute(`
         UPDATE Users SET email = @email, displayName = @displayName, forename = @forename, surname = @surname,
-          division = @division, profilePicture = @profilePicture, updatedAt = SYSUTCDATETIME()
+          division = @division, ${mediaAssignment('profilePicture')}, updatedAt = SYSUTCDATETIME()
         WHERE id = @id AND userType = 'Parent'`, {
         id,
         email: merged.email,
@@ -485,12 +544,30 @@ export class SqlRepository {
       if (isUniqueViolation(err)) throw new Error('DUPLICATE_EMAIL');
       throw err;
     }
+    invalidateUsers();
     return (await this.loadParents('id = @id', { id }))[0];
   }
 
-  async updateUserProfilePicture(type: 'Staff' | 'Student' | 'Parent', id: string, pictureDataUrl: string): Promise<string> {
-    await execute('UPDATE Users SET profilePicture = @picture, updatedAt = SYSUTCDATETIME() WHERE id = @id AND userType = @type', { id, type, picture: pictureDataUrl });
-    return pictureDataUrl;
+  /** Stores a new picture and returns the URL it is now served from (null if the user does not exist). */
+  async updateUserProfilePicture(type: 'Staff' | 'Student' | 'Parent', id: string, pictureDataUrl: string): Promise<string | null> {
+    const rows = await query(`
+      UPDATE Users SET profilePicture = @picture, updatedAt = SYSUTCDATETIME()
+      OUTPUT INSERTED.updatedAt WHERE id = @id AND userType = @type`, { id, type, picture: pictureDataUrl });
+    invalidateUsers();
+    return rows[0] ? mediaUrl.userPicture(id, iso(rows[0].updatedAt)) : null;
+  }
+
+  async listStudents(): Promise<Types.StudentUser[]> {
+    return this.loadStudents('1 = 1');
+  }
+
+  async listParents(): Promise<Types.ParentUser[]> {
+    return this.loadParents('1 = 1');
+  }
+
+  /** Staff with an assigned parking space (999 means "no space"). */
+  async getParkingEligibleStaff(): Promise<Types.StaffUser[]> {
+    return this.loadStaff('parkingSpace IS NOT NULL AND parkingSpace NOT IN (0, 999)');
   }
 
   async getAllUsers() {
@@ -567,10 +644,13 @@ export class SqlRepository {
     await execute(`
       IF NOT EXISTS (SELECT 1 FROM ParentStudents WHERE parentId = @parentId AND studentId = @studentId)
         INSERT INTO ParentStudents (parentId, studentId) VALUES (@parentId, @studentId)`, { parentId, studentId });
+    invalidateUsers();
   }
 
   async deleteParentStudentLink(parentId: string, studentId: string): Promise<boolean> {
-    return (await execute('DELETE FROM ParentStudents WHERE parentId = @parentId AND studentId = @studentId', { parentId, studentId })) > 0;
+    const deleted = (await execute('DELETE FROM ParentStudents WHERE parentId = @parentId AND studentId = @studentId', { parentId, studentId })) > 0;
+    invalidateUsers();
+    return deleted;
   }
 
   async createPendingParentLink(parentId: string, studentEmail: string): Promise<Types.PendingParentLink> {
@@ -613,6 +693,7 @@ export class SqlRepository {
           AND NOT EXISTS (SELECT 1 FROM ParentStudents ps WHERE ps.parentId = p.parentId AND ps.studentId = @studentId);
         DELETE FROM PendingParentStudentLinks WHERE studentEmail = @email;`, { email, studentId }, tx);
     });
+    invalidateUsers();
   }
 
   // -------------------------------------------------------------
@@ -637,7 +718,9 @@ export class SqlRepository {
   }
 
   async deleteClass(code: string): Promise<boolean> {
-    return (await execute('DELETE FROM Classes WHERE code = @code', { code: code.toUpperCase().trim() })) > 0;
+    const deleted = (await execute('DELETE FROM Classes WHERE code = @code', { code: code.toUpperCase().trim() })) > 0;
+    invalidateUsers();
+    return deleted;
   }
 
   private mapPeriod(r: any): Types.LessonPeriod {
@@ -697,7 +780,8 @@ export class SqlRepository {
     const lessons = await query('SELECT * FROM DistanceLessons WHERE classCode = @classCode AND [date] = @date', { classCode, date });
     if (!lessons.length) return [];
     const resources = await query(`
-      SELECT * FROM DistanceLessonResources
+      SELECT id, lessonId, label, url, fileName, mimeType, sortOrder, CASE WHEN fileData IS NULL THEN 0 ELSE 1 END AS hasFile
+      FROM DistanceLessonResources
       WHERE lessonId IN (SELECT id FROM DistanceLessons WHERE classCode = @classCode AND [date] = @date)
       ORDER BY lessonId, sortOrder`, { classCode, date });
     return lessons.map(l => ({
@@ -710,19 +794,23 @@ export class SqlRepository {
       teacherUserId: l.teacherUserId,
       createdAt: iso(l.createdAt),
       updatedAt: iso(l.updatedAt),
-      resources: resources.filter(r => r.lessonId === l.id).map(r => ({
+      resources: resources.filter(r => r.lessonId === l.id).map(r => presentResource({
         id: r.id,
         lessonId: r.lessonId,
         label: r.label,
         url: r.url ?? null,
-        fileData: r.fileData ?? null,
         fileName: r.fileName ?? null,
         mimeType: r.mimeType ?? null,
         sortOrder: r.sortOrder,
+        hasFile: Number(r.hasFile) === 1,
       })),
     }));
   }
 
+  /**
+   * Saves a lesson, updating resources in place: submitted resources with a known id keep their stored
+   * file unless a new data URL is supplied (or `hasFile` is false); resources not submitted are removed.
+   */
   async upsertLesson(data: { classCode: string; date: string; periodId: number; title: string; description?: string | null; teacherUserId: string; resources: Types.DistanceLessonResource[] }): Promise<Types.DistanceLesson> {
     const params = {
       classCode: data.classCode,
@@ -732,6 +820,19 @@ export class SqlRepository {
       description: data.description?.trim() || null,
       teacherUserId: data.teacherUserId,
     };
+    const incoming = JSON.stringify(data.resources.map((r, i) => {
+      const fileData = isDataUrl(r.fileData) ? r.fileData : null;
+      return {
+        id: r.id ?? null,
+        label: r.label,
+        url: r.url ?? null,
+        fileData,
+        keepFile: !fileData && r.hasFile ? 1 : 0,
+        fileName: r.fileName ?? null,
+        mimeType: r.mimeType ?? null,
+        sortOrder: i,
+      };
+    }));
     await inTransaction(async tx => {
       const existing = await query('SELECT id FROM DistanceLessons WHERE classCode = @classCode AND [date] = @date AND periodId = @periodId', params, tx);
       let lessonId: number;
@@ -740,27 +841,36 @@ export class SqlRepository {
         await execute(`
           UPDATE DistanceLessons SET title = @title, description = @description, teacherUserId = @teacherUserId, updatedAt = SYSUTCDATETIME()
           WHERE id = @lessonId`, { ...params, lessonId }, tx);
-        await execute('DELETE FROM DistanceLessonResources WHERE lessonId = @lessonId', { lessonId }, tx);
       } else {
         const inserted = await query(`
           INSERT INTO DistanceLessons (classCode, [date], periodId, title, description, teacherUserId)
           OUTPUT INSERTED.id VALUES (@classCode, @date, @periodId, @title, @description, @teacherUserId)`, params, tx);
         lessonId = inserted[0].id;
       }
-      for (let i = 0; i < data.resources.length; i++) {
-        const r = data.resources[i];
-        await execute(`
-          INSERT INTO DistanceLessonResources (lessonId, label, url, fileData, fileName, mimeType, sortOrder)
-          VALUES (@lessonId, @label, @url, @fileData, @fileName, @mimeType, @sortOrder)`, {
-          lessonId,
-          label: r.label,
-          url: r.url ?? null,
-          fileData: r.fileData ?? null,
-          fileName: r.fileName ?? null,
-          mimeType: r.mimeType ?? null,
-          sortOrder: i,
-        }, tx);
-      }
+      await execute(`
+        DECLARE @incoming TABLE (id INT NULL, label NVARCHAR(200), url NVARCHAR(1000), fileData NVARCHAR(MAX), keepFile BIT,
+          fileName NVARCHAR(255), mimeType NVARCHAR(100), sortOrder INT);
+        INSERT INTO @incoming
+          SELECT id, label, url, fileData, keepFile, fileName, mimeType, sortOrder FROM OPENJSON(@resources)
+          WITH (id INT, label NVARCHAR(200), url NVARCHAR(1000), fileData NVARCHAR(MAX), keepFile BIT,
+            fileName NVARCHAR(255), mimeType NVARCHAR(100), sortOrder INT);
+
+        DELETE FROM DistanceLessonResources
+        WHERE lessonId = @lessonId AND id NOT IN (SELECT id FROM @incoming WHERE id IS NOT NULL);
+
+        UPDATE r SET label = i.label, url = i.url, sortOrder = i.sortOrder,
+          fileData = CASE WHEN i.fileData IS NOT NULL THEN i.fileData WHEN i.keepFile = 1 THEN r.fileData END,
+          fileName = CASE WHEN i.fileData IS NOT NULL OR (i.keepFile = 1 AND r.fileData IS NOT NULL) THEN COALESCE(i.fileName, r.fileName) END,
+          mimeType = CASE WHEN i.fileData IS NOT NULL OR (i.keepFile = 1 AND r.fileData IS NOT NULL) THEN COALESCE(i.mimeType, r.mimeType) END
+        FROM DistanceLessonResources r JOIN @incoming i ON i.id = r.id
+        WHERE r.lessonId = @lessonId;
+
+        INSERT INTO DistanceLessonResources (lessonId, label, url, fileData, fileName, mimeType, sortOrder)
+        SELECT @lessonId, i.label, i.url, i.fileData,
+          CASE WHEN i.fileData IS NOT NULL THEN i.fileName END, CASE WHEN i.fileData IS NOT NULL THEN i.mimeType END, i.sortOrder
+        FROM @incoming i
+        WHERE i.id IS NULL OR NOT EXISTS (SELECT 1 FROM DistanceLessonResources r WHERE r.id = i.id AND r.lessonId = @lessonId);`,
+      { lessonId, resources: incoming }, tx);
     });
     const lessons = await this.getDayLessons(data.classCode, data.date);
     return lessons.find(l => l.periodId === data.periodId)!;
@@ -930,12 +1040,12 @@ export class SqlRepository {
   // Streams
   // -------------------------------------------------------------
   async getActiveStreams(): Promise<Types.StreamItem[]> {
-    const rows = await query('SELECT * FROM Streams WHERE active = 1 ORDER BY createdAt DESC');
+    const rows = await query(`SELECT ${STREAM_SELECT} FROM Streams WHERE active = 1 ORDER BY createdAt DESC`);
     return rows.map(r => this.mapStream(r));
   }
 
   async getAllStreams(): Promise<Types.StreamItem[]> {
-    const rows = await query('SELECT * FROM Streams ORDER BY createdAt DESC');
+    const rows = await query(`SELECT ${STREAM_SELECT} FROM Streams ORDER BY createdAt DESC`);
     return rows.map(r => this.mapStream(r));
   }
 
@@ -955,15 +1065,22 @@ export class SqlRepository {
     if (data.id) {
       const updated = await query(`
         UPDATE Streams SET title = @title, description = @description, categories = @categories, streamType = @streamType,
-          accessType = @accessType, videoUrl = @videoUrl, thumbnailUrl = @thumbnailUrl, active = @active,
+          accessType = @accessType, videoUrl = @videoUrl, ${mediaAssignment('thumbnailUrl')}, active = @active,
           createdBy = COALESCE(@createdBy, createdBy), updatedAt = SYSUTCDATETIME()
-        OUTPUT INSERTED.* WHERE id = @id`, params);
-      if (updated[0]) return this.mapStream(updated[0]);
+        OUTPUT INSERTED.id WHERE id = @id`, params);
+      if (updated[0]) return this.getStream(updated[0].id);
     }
     const inserted = await query(`
       INSERT INTO Streams (title, description, categories, streamType, accessType, videoUrl, thumbnailUrl, active, createdBy)
-      OUTPUT INSERTED.* VALUES (@title, @description, @categories, @streamType, @accessType, @videoUrl, @thumbnailUrl, @active, @createdBy)`, params);
-    return this.mapStream(inserted[0]);
+      OUTPUT INSERTED.id
+      VALUES (@title, @description, @categories, @streamType, @accessType, @videoUrl,
+        CASE WHEN @thumbnailUrl LIKE '/api/media/%' THEN NULL ELSE @thumbnailUrl END, @active, @createdBy)`, params);
+    return this.getStream(inserted[0].id);
+  }
+
+  private async getStream(id: number): Promise<Types.StreamItem> {
+    const rows = await query(`SELECT ${STREAM_SELECT} FROM Streams WHERE id = @id`, { id: Number(id) });
+    return this.mapStream(rows[0]);
   }
 
   async deleteStream(id: number): Promise<boolean> {
@@ -974,27 +1091,33 @@ export class SqlRepository {
   // Branding & Content (single-row tables, id = 1)
   // -------------------------------------------------------------
   private async getSingleton<T>(table: string, columns: string[]): Promise<T> {
-    let rows = await query(`SELECT * FROM ${table} WHERE id = 1`);
+    const media = SINGLETON_MEDIA[table];
+    const select = columns.map(c => (media[c] ? leanMedia(c, c) : c)).join(', ');
+    let rows = await query(`SELECT updatedAt, ${select} FROM ${table} WHERE id = 1`);
     if (!rows[0]) {
       // schema.sql seeds the row; column defaults supply the values if it was deleted since.
       rows = await query(`
         IF NOT EXISTS (SELECT 1 FROM ${table} WHERE id = 1) INSERT INTO ${table} (id) VALUES (1);
-        SELECT * FROM ${table} WHERE id = 1;`);
+        SELECT updatedAt, ${select} FROM ${table} WHERE id = 1;`);
     }
     const r = rows[0];
-    const result: any = { id: 1, updatedAt: iso(r.updatedAt) };
-    for (const col of columns) result[col] = r[col] ?? null;
+    const updatedAt = iso(r.updatedAt);
+    const result: any = { id: 1, updatedAt };
+    for (const col of columns) {
+      result[col] = media[col] ? mediaValue(r, col, () => media[col](updatedAt)) : r[col] ?? null;
+    }
     return result as T;
   }
 
   private async updateSingleton<T>(table: string, columns: string[], data: Record<string, unknown>): Promise<T> {
+    const media = SINGLETON_MEDIA[table];
     const provided = columns.filter(c => data[c] !== undefined);
     if (provided.length) {
       const params: Params = {};
       for (const c of provided) params[c] = data[c];
       await execute(`
         IF NOT EXISTS (SELECT 1 FROM ${table} WHERE id = 1) INSERT INTO ${table} (id) VALUES (1);
-        UPDATE ${table} SET ${provided.map(c => `${c} = @${c}`).join(', ')}, updatedAt = SYSUTCDATETIME() WHERE id = 1;`, params);
+        UPDATE ${table} SET ${provided.map(c => (media[c] ? mediaAssignment(c) : `${c} = @${c}`)).join(', ')}, updatedAt = SYSUTCDATETIME() WHERE id = 1;`, params);
     }
     return this.getSingleton<T>(table, columns);
   }
@@ -1021,6 +1144,28 @@ export class SqlRepository {
 
   async updateLoginContent(data: Partial<Types.PortalLoginContent>): Promise<Types.PortalLoginContent> {
     return this.updateSingleton<Types.PortalLoginContent>('PortalLoginContent', LOGIN_COLUMNS, data);
+  }
+
+  // -------------------------------------------------------------
+  // Media (raw stored data for /api/media)
+  // -------------------------------------------------------------
+  async getMedia(kind: MediaKind, id?: string | number): Promise<MediaRecord | null> {
+    const sources: Record<MediaKind, string> = {
+      navLogo: 'SELECT navLogo AS data, updatedAt FROM PortalBranding WHERE id = 1',
+      favicon: 'SELECT favicon AS data, updatedAt FROM PortalBranding WHERE id = 1',
+      heroImage: 'SELECT heroImage AS data, updatedAt FROM PortalHomeContent WHERE id = 1',
+      streamThumbnail: 'SELECT thumbnailUrl AS data, updatedAt FROM Streams WHERE id = @id',
+      userPicture: 'SELECT profilePicture AS data, updatedAt FROM Users WHERE id = @id',
+      lessonResource: `
+        SELECT r.fileData AS data, r.fileName, r.mimeType, l.classCode, l.updatedAt
+        FROM DistanceLessonResources r JOIN DistanceLessons l ON l.id = r.lessonId WHERE r.id = @id`,
+    };
+    const numericId = kind === 'streamThumbnail' || kind === 'lessonResource';
+    if (numericId && !Number.isInteger(Number(id))) return null;
+    const rows = await query(sources[kind], { id: numericId ? Number(id) : String(id ?? '') });
+    const r = rows[0];
+    if (!r) return null;
+    return { data: r.data ?? null, updatedAt: iso(r.updatedAt), fileName: r.fileName, mimeType: r.mimeType, classCode: r.classCode };
   }
 
   // -------------------------------------------------------------

@@ -108,8 +108,13 @@ distanceLearningRouter.put('/lessons', requireDistanceLearningUser, async (req: 
           res.status(400).json({ error: 'Each resource must have a non-blank label' });
           return;
         }
-        if (!r.url && !r.fileData) {
+        const keepsStoredFile = r.id != null && r.hasFile === true;
+        if (!r.url && !r.fileData && !keepsStoredFile) {
           res.status(400).json({ error: 'Each resource must provide either a URL or an uploaded file' });
+          return;
+        }
+        if (r.fileData && !/^data:/.test(r.fileData)) {
+          res.status(400).json({ error: 'Uploaded files must be sent as data URLs' });
           return;
         }
         if (r.url && r.url.length > 1000) {
@@ -117,6 +122,8 @@ distanceLearningRouter.put('/lessons', requireDistanceLearningUser, async (req: 
           return;
         }
         validResources.push({
+          id: Number.isInteger(r.id) ? r.id : undefined,
+          hasFile: keepsStoredFile,
           label: r.label.trim(),
           url: r.url?.trim() || null,
           fileData: r.fileData || null,

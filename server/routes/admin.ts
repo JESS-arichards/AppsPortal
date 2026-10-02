@@ -397,9 +397,11 @@ adminRouter.delete('/periods/:id', requireAdmin('periods'), async (req: Request,
 // GET /api/admin/parent-links
 adminRouter.get('/parent-links', requireAdmin('parentLinks'), async (_req: Request, res: Response) => {
   try {
-    const activeLinks = await repository.getAllParentLinks();
-    const parents = (await repository.getAllUsers()).parents;
-    const students = (await repository.getAllUsers()).students;
+    const [activeLinks, parents, students] = await Promise.all([
+      repository.getAllParentLinks(),
+      repository.listParents(),
+      repository.listStudents(),
+    ]);
     res.json({ activeLinks, parents, students });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -482,8 +484,7 @@ adminRouter.delete('/parent-links/pending/:id', requireAdmin('parentLinks'), asy
 // GET /api/admin/parking/releases
 adminRouter.get('/parking/releases', requireAdmin('parking'), async (_req: Request, res: Response) => {
   try {
-    const releases = await repository.getAllParkingReleases();
-    const staff = (await repository.getAllUsers()).staff.filter(s => s.parkingSpace && s.parkingSpace !== 999);
+    const [releases, staff] = await Promise.all([repository.getAllParkingReleases(), repository.getParkingEligibleStaff()]);
     res.json({ releases, eligibleStaff: staff });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

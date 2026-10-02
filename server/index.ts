@@ -12,6 +12,7 @@ import { adminRouter } from './routes/admin.js';
 import { distanceLearningRouter } from './routes/distanceLearning.js';
 import { parkingRouter } from './routes/parking.js';
 import { absenceRouter } from './routes/absence.js';
+import { mediaRouter } from './routes/media.js';
 import { streamingRouter } from './routes/streaming.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -43,6 +44,7 @@ app.use('/api/distance-learning', distanceLearningRouter);
 app.use('/api/parking', parkingRouter);
 app.use('/api/absence', absenceRouter);
 app.use('/api/streaming', streamingRouter);
+app.use('/api/media', mediaRouter);
 
 // Health check endpoint
 app.get('/api/health', (_req: Request, res: Response) => {

@@ -2,6 +2,7 @@ import { memoryStore, isAzureSqlConnected } from './index.js';
 import * as Types from './types.js';
 import { SqlRepository } from './sqlRepository.js';
 import { getWeekdaysBetween } from './dates.js';
+import { MediaKind, MediaRecord, isDataUrl, presentBranding, presentHomeContent, presentResource, presentStream, presentUser, resolveMediaWrite } from './media.js';
 
 /** In-memory data store used for local development and automated tests. */
 export class MemoryRepository {
@@ -10,14 +11,14 @@ export class MemoryRepository {
   // -------------------------------------------------------------
   async getStaffById(id: string): Promise<Types.StaffUser | null> {
     const user = memoryStore.staffUsers.get(id);
-    return user ? { ...user } : null;
+    return user ? presentUser(user) : null;
   }
 
   async getStaffByEmail(email: string): Promise<Types.StaffUser | null> {
     const normalized = email.toLowerCase().trim();
     for (const user of memoryStore.staffUsers.values()) {
       if (user.email.toLowerCase() === normalized) {
-        return { ...user };
+        return presentUser(user);
       }
     }
     return null;
@@ -25,14 +26,14 @@ export class MemoryRepository {
 
   async getStudentById(id: string): Promise<Types.StudentUser | null> {
     const user = memoryStore.studentUsers.get(id);
-    return user ? { ...user } : null;
+    return user ? presentUser(user) : null;
   }
 
   async getStudentByEmail(email: string): Promise<Types.StudentUser | null> {
     const normalized = email.toLowerCase().trim();
     for (const user of memoryStore.studentUsers.values()) {
       if (user.email.toLowerCase() === normalized) {
-        return { ...user };
+        return presentUser(user);
       }
     }
     return null;
@@ -42,7 +43,7 @@ export class MemoryRepository {
     const user = memoryStore.parentUsers.get(id);
     if (!user) return null;
     const linked = await this.getParentStudents(id);
-    return { ...user, linkedStudents: linked };
+    return { ...presentUser(user), linkedStudents: linked };
   }
 
   async getParentByEmail(email: string): Promise<Types.ParentUser | null> {
@@ -50,7 +51,7 @@ export class MemoryRepository {
     for (const user of memoryStore.parentUsers.values()) {
       if (user.email.toLowerCase() === normalized) {
         const linked = await this.getParentStudents(user.id);
-        return { ...user, linkedStudents: linked };
+        return { ...presentUser(user), linkedStudents: linked };
       }
     }
     return null;
@@ -69,7 +70,7 @@ export class MemoryRepository {
       jobTitle: userData.jobTitle ?? existing?.jobTitle ?? null,
       division: userData.division ?? existing?.division ?? null,
       department: userData.department ?? existing?.department ?? null,
-      profilePicture: userData.profilePicture ?? existing?.profilePicture ?? null,
+      profilePicture: resolveMediaWrite(userData.profilePicture ?? undefined, existing?.profilePicture),
       parkingSpace: userData.parkingSpace ?? existing?.parkingSpace ?? null,
       extension: userData.extension ?? existing?.extension ?? null,
       misId: userData.misId ?? existing?.misId ?? null,
@@ -80,7 +81,7 @@ export class MemoryRepository {
       updatedAt: new Date().toISOString(),
     };
     memoryStore.staffUsers.set(updated.id, updated);
-    return updated;
+    return presentUser(updated);
   }
 
   async upsertStudentUser(userData: Partial<Types.StudentUser> & { id: string; email: string; displayName: string }): Promise<Types.StudentUser> {
@@ -94,7 +95,7 @@ export class MemoryRepository {
       authType: 'Entra',
       division: userData.division ?? existing?.division ?? null,
       department: userData.department ?? existing?.department ?? 'Student',
-      profilePicture: userData.profilePicture ?? existing?.profilePicture ?? null,
+      profilePicture: resolveMediaWrite(userData.profilePicture ?? undefined, existing?.profilePicture),
       classes: userData.classes ?? existing?.classes ?? [],
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -102,7 +103,7 @@ export class MemoryRepository {
     memoryStore.studentUsers.set(updated.id, updated);
     // Resolve any pending parent links
     await this.resolvePendingParentLinksForStudent(updated.email, updated.id);
-    return updated;
+    return presentUser(updated);
   }
 
   async createParentUser(userData: { email: string; displayName: string; forename?: string; surname?: string; studentEmail?: string }): Promise<Types.ParentUser> {
@@ -135,7 +136,7 @@ export class MemoryRepository {
       }
     }
 
-    return parent;
+    return presentUser(parent);
   }
 
   async updateStaffUser(id: string, updates: Partial<Types.StaffUser>): Promise<Types.StaffUser> {
@@ -149,10 +150,11 @@ export class MemoryRepository {
       ...staff,
       ...updates,
       email: updates.email ? updates.email.toLowerCase().trim() : staff.email,
+      profilePicture: resolveMediaWrite(updates.profilePicture, staff.profilePicture),
       updatedAt: new Date().toISOString(),
     };
     memoryStore.staffUsers.set(id, updated);
-    return updated;
+    return presentUser(updated);
   }
 
   async updateStudentUser(id: string, updates: Partial<Types.StudentUser>): Promise<Types.StudentUser> {
@@ -166,10 +168,11 @@ export class MemoryRepository {
       ...student,
       ...updates,
       email: updates.email ? updates.email.toLowerCase().trim() : student.email,
+      profilePicture: resolveMediaWrite(updates.profilePicture, student.profilePicture),
       updatedAt: new Date().toISOString(),
     };
     memoryStore.studentUsers.set(id, updated);
-    return updated;
+    return presentUser(updated);
   }
 
   async updateParentUser(id: string, updates: Partial<Types.ParentUser>): Promise<Types.ParentUser> {
@@ -183,31 +186,43 @@ export class MemoryRepository {
       ...parent,
       ...updates,
       email: updates.email ? updates.email.toLowerCase().trim() : parent.email,
+      profilePicture: resolveMediaWrite(updates.profilePicture, parent.profilePicture),
       updatedAt: new Date().toISOString(),
     };
     memoryStore.parentUsers.set(id, updated);
-    return updated;
+    return presentUser(updated);
   }
 
-  async updateUserProfilePicture(type: 'Staff' | 'Student' | 'Parent', id: string, pictureDataUrl: string): Promise<string> {
-    if (type === 'Staff') {
-      const user = memoryStore.staffUsers.get(id);
-      if (user) user.profilePicture = pictureDataUrl;
-    } else if (type === 'Student') {
-      const user = memoryStore.studentUsers.get(id);
-      if (user) user.profilePicture = pictureDataUrl;
-    } else if (type === 'Parent') {
-      const user = memoryStore.parentUsers.get(id);
-      if (user) user.profilePicture = pictureDataUrl;
-    }
-    return pictureDataUrl;
+  /** Stores a new picture and returns the URL it is now served from (null if the user does not exist). */
+  async updateUserProfilePicture(type: 'Staff' | 'Student' | 'Parent', id: string, pictureDataUrl: string): Promise<string | null> {
+    const store = type === 'Staff' ? memoryStore.staffUsers : type === 'Student' ? memoryStore.studentUsers : memoryStore.parentUsers;
+    const user = store.get(id);
+    if (!user) return null;
+    user.profilePicture = pictureDataUrl;
+    user.updatedAt = new Date().toISOString();
+    return presentUser(user).profilePicture ?? null;
+  }
+
+  async listStudents(): Promise<Types.StudentUser[]> {
+    return Array.from(memoryStore.studentUsers.values()).map(presentUser);
+  }
+
+  async listParents(): Promise<Types.ParentUser[]> {
+    return Array.from(memoryStore.parentUsers.values()).map(presentUser);
+  }
+
+  /** Staff with an assigned parking space (999 means "no space"). */
+  async getParkingEligibleStaff(): Promise<Types.StaffUser[]> {
+    return Array.from(memoryStore.staffUsers.values())
+      .filter(s => s.parkingSpace && s.parkingSpace !== 999)
+      .map(presentUser);
   }
 
   async getAllUsers() {
     return {
-      staff: Array.from(memoryStore.staffUsers.values()),
-      students: Array.from(memoryStore.studentUsers.values()),
-      parents: Array.from(memoryStore.parentUsers.values()),
+      staff: Array.from(memoryStore.staffUsers.values()).map(presentUser),
+      students: await this.listStudents(),
+      parents: await this.listParents(),
       classes: Array.from(memoryStore.classes.values()),
       availableRoles: ['Admin', 'Staff', 'Onboarding', 'Oasis'],
       availableSections: ['users', 'classes', 'periods', 'parentLinks', 'parking', 'streaming', 'branding'],
@@ -255,7 +270,7 @@ export class MemoryRepository {
     const students: Types.StudentUser[] = [];
     for (const link of links) {
       const student = memoryStore.studentUsers.get(link.studentId);
-      if (student) students.push(student);
+      if (student) students.push(presentUser(student));
     }
     return students;
   }
@@ -266,7 +281,7 @@ export class MemoryRepository {
       const parent = memoryStore.parentUsers.get(link.parentId);
       const student = memoryStore.studentUsers.get(link.studentId);
       if (parent && student) {
-        list.push({ parent, student });
+        list.push({ parent: presentUser(parent), student: presentUser(student) });
       }
     }
     return list;
@@ -407,15 +422,21 @@ export class MemoryRepository {
     const lessons: Types.DistanceLesson[] = [];
     for (const lesson of memoryStore.distanceLessons.values()) {
       if (lesson.classCode === classCode && lesson.date === date) {
-        lessons.push(lesson);
+        lessons.push({ ...lesson, resources: (lesson.resources || []).map(r => presentResource(r as Types.DistanceLessonResource & { id: number })) });
       }
     }
     return lessons;
   }
 
+  /**
+   * Saves a lesson, updating resources in place: submitted resources with a known id keep their stored
+   * file unless a new data URL is supplied (or `hasFile` is false); resources not submitted are removed.
+   */
   async upsertLesson(data: { classCode: string; date: string; periodId: number; title: string; description?: string | null; teacherUserId: string; resources: Types.DistanceLessonResource[] }): Promise<Types.DistanceLesson> {
     const key = `${data.classCode}_${data.date}_${data.periodId}`;
-    const id = memoryStore.distanceLessons.get(key)?.id || Math.floor(Math.random() * 1000000);
+    const existing = memoryStore.distanceLessons.get(key);
+    const id = existing?.id ?? memoryStore.nextLessonId++;
+    const previous = new Map((existing?.resources || []).map(r => [r.id, r]));
     const lesson: Types.DistanceLesson = {
       id,
       classCode: data.classCode,
@@ -424,17 +445,25 @@ export class MemoryRepository {
       title: data.title.trim(),
       description: data.description?.trim() || null,
       teacherUserId: data.teacherUserId,
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      resources: data.resources.map((r, i) => ({
-        ...r,
-        id: i + 1,
-        lessonId: id,
-        sortOrder: i,
-      })),
+      resources: data.resources.map((r, i) => {
+        const prior = r.id != null ? previous.get(r.id) : undefined;
+        const fileData = isDataUrl(r.fileData) ? r.fileData : prior && r.hasFile ? prior.fileData ?? null : null;
+        return {
+          id: prior?.id ?? memoryStore.nextResourceId++,
+          lessonId: id,
+          label: r.label,
+          url: r.url ?? null,
+          fileData,
+          fileName: fileData ? r.fileName ?? prior?.fileName ?? null : null,
+          mimeType: fileData ? r.mimeType ?? prior?.mimeType ?? null : null,
+          sortOrder: i,
+        };
+      }),
     };
     memoryStore.distanceLessons.set(key, lesson);
-    return lesson;
+    return (await this.getDayLessons(data.classCode, data.date)).find(l => l.periodId === data.periodId)!;
   }
 
   async deleteLesson(classCode: string, date: string, periodId: number): Promise<boolean> {
@@ -536,7 +565,8 @@ export class MemoryRepository {
     }
     let reserverStaff: Types.StaffUser | null = null;
     if (rel.reserverUserId) {
-      reserverStaff = memoryStore.staffUsers.get(rel.reserverUserId) || null;
+      const reserver = memoryStore.staffUsers.get(rel.reserverUserId);
+      reserverStaff = reserver ? presentUser(reserver) : null;
     }
     memoryStore.parkingReleases.delete(id);
     return { release: rel, reserverStaff };
@@ -623,16 +653,19 @@ export class MemoryRepository {
   async getActiveStreams(): Promise<Types.StreamItem[]> {
     return Array.from(memoryStore.streams.values())
       .filter(s => s.active)
-      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .map(presentStream);
   }
 
   async getAllStreams(): Promise<Types.StreamItem[]> {
     return Array.from(memoryStore.streams.values())
-      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .map(presentStream);
   }
 
   async upsertStream(data: Partial<Types.StreamItem> & { title: string; videoUrl: string; streamType: 'On Demand' | 'Live'; accessType: 'Free to Air' | 'Pay Per View'; categories: string }): Promise<Types.StreamItem> {
-    const id = data.id && memoryStore.streams.has(data.id) ? data.id : memoryStore.nextStreamId++;
+    const existing = data.id ? memoryStore.streams.get(data.id) : undefined;
+    const id = existing ? existing.id : memoryStore.nextStreamId++;
     const stream: Types.StreamItem = {
       id,
       title: data.title.trim(),
@@ -641,14 +674,14 @@ export class MemoryRepository {
       streamType: data.streamType,
       accessType: data.accessType,
       videoUrl: data.videoUrl.trim(),
-      thumbnailUrl: data.thumbnailUrl || null,
+      thumbnailUrl: resolveMediaWrite(data.thumbnailUrl || null, existing?.thumbnailUrl),
       active: data.active !== undefined ? data.active : true,
-      createdBy: data.createdBy || null,
-      createdAt: data.createdAt || new Date().toISOString(),
+      createdBy: data.createdBy || existing?.createdBy || null,
+      createdAt: existing?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     memoryStore.streams.set(id, stream);
-    return stream;
+    return presentStream(stream);
   }
 
   async deleteStream(id: number): Promise<boolean> {
@@ -659,29 +692,34 @@ export class MemoryRepository {
   // Branding & Content
   // -------------------------------------------------------------
   async getBranding(): Promise<Types.PortalBranding> {
-    return { ...memoryStore.branding };
+    return presentBranding(memoryStore.branding);
   }
 
   async updateBranding(data: Partial<Types.PortalBranding>): Promise<Types.PortalBranding> {
+    const current = memoryStore.branding;
     memoryStore.branding = {
-      ...memoryStore.branding,
+      ...current,
       ...data,
+      navLogo: resolveMediaWrite(data.navLogo, current.navLogo),
+      favicon: resolveMediaWrite(data.favicon, current.favicon),
       updatedAt: new Date().toISOString(),
     };
-    return { ...memoryStore.branding };
+    return presentBranding(memoryStore.branding);
   }
 
   async getHomeContent(): Promise<Types.PortalHomeContent> {
-    return { ...memoryStore.homeContent };
+    return presentHomeContent(memoryStore.homeContent);
   }
 
   async updateHomeContent(data: Partial<Types.PortalHomeContent>): Promise<Types.PortalHomeContent> {
+    const current = memoryStore.homeContent;
     memoryStore.homeContent = {
-      ...memoryStore.homeContent,
+      ...current,
       ...data,
+      heroImage: resolveMediaWrite(data.heroImage, current.heroImage),
       updatedAt: new Date().toISOString(),
     };
-    return { ...memoryStore.homeContent };
+    return presentHomeContent(memoryStore.homeContent);
   }
 
   async getLoginContent(): Promise<Types.PortalLoginContent> {
@@ -695,6 +733,34 @@ export class MemoryRepository {
       updatedAt: new Date().toISOString(),
     };
     return { ...memoryStore.loginContent };
+  }
+
+  // -------------------------------------------------------------
+  // Media (raw stored data for /api/media)
+  // -------------------------------------------------------------
+  async getMedia(kind: MediaKind, id?: string | number): Promise<MediaRecord | null> {
+    switch (kind) {
+      case 'navLogo':
+      case 'favicon':
+        return { data: memoryStore.branding[kind] ?? null, updatedAt: memoryStore.branding.updatedAt };
+      case 'heroImage':
+        return { data: memoryStore.homeContent.heroImage ?? null, updatedAt: memoryStore.homeContent.updatedAt };
+      case 'streamThumbnail': {
+        const stream = memoryStore.streams.get(Number(id));
+        return stream ? { data: stream.thumbnailUrl ?? null, updatedAt: stream.updatedAt } : null;
+      }
+      case 'userPicture': {
+        const key = String(id);
+        const user = memoryStore.staffUsers.get(key) || memoryStore.studentUsers.get(key) || memoryStore.parentUsers.get(key);
+        return user ? { data: user.profilePicture ?? null, updatedAt: user.updatedAt } : null;
+      }
+      case 'lessonResource':
+        for (const lesson of memoryStore.distanceLessons.values()) {
+          const r = lesson.resources?.find(res => res.id === Number(id));
+          if (r) return { data: r.fileData ?? null, fileName: r.fileName, mimeType: r.mimeType, classCode: lesson.classCode, updatedAt: lesson.updatedAt };
+        }
+        return null;
+    }
   }
 
   // -------------------------------------------------------------
