@@ -31,11 +31,26 @@ app.use(cors({
   credentials: true,
 }));
 
-// Global auth & impersonation context middleware
-app.use(authMiddleware);
+// Serve frontend static assets before auth so they never trigger user lookups.
+// Vite emits content-hashed files under /assets, so those can be cached forever.
+const distPath = path.resolve(__dirname, '..', '..', 'dist');
+app.use(express.static(distPath, {
+  index: false,
+  setHeaders: (res, filePath) => {
+    const rel = path.relative(distPath, filePath).split(path.sep);
+    if (rel[0] === 'assets') {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+  },
+}));
 
-// Public branding, home/login content & portal-config.js
+// Public branding, home/login content & portal-config.js (no session required)
 app.use(publicRouter);
+
+// Auth & impersonation context only for API routes
+app.use('/api', authMiddleware);
 
 // Feature & Auth API routes
 app.use('/api/auth', authRouter);
@@ -61,12 +76,10 @@ app.all('/api/*', (_req: Request, res: Response) => {
   res.status(405).json({ error: 'Method Not Allowed' });
 });
 
-// Serve frontend static assets
-const distPath = path.resolve(__dirname, '..', '..', 'dist');
-app.use(express.static(distPath));
-
-// Clean URL routing: Map portal routes to index.html for Single Page Application
+// Clean URL routing: Map portal routes to index.html for Single Page Application.
+// index.html must always revalidate so new deployments pick up the new hashed bundles.
 app.get('*', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(distPath, 'index.html'), (err) => {
     if (err) {
       // In development when dist isn't built yet, provide an informative HTML message

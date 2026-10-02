@@ -49,9 +49,26 @@ declare global {
 
 // In-memory token cache for Entra Bearer token lookups (5-minute TTL per Section 10)
 const entraTokenCache = new Map<string, { user: AuthenticatedUser; expiresAt: number }>();
+const ENTRA_TOKEN_CACHE_MAX = 1000;
+
+function cacheEntraToken(token: string, user: AuthenticatedUser): void {
+  const now = Date.now();
+  if (entraTokenCache.size >= ENTRA_TOKEN_CACHE_MAX) {
+    for (const [key, entry] of entraTokenCache) {
+      if (entry.expiresAt <= now) entraTokenCache.delete(key);
+    }
+    // Still full: evict the oldest entries (Map preserves insertion order).
+    while (entraTokenCache.size >= ENTRA_TOKEN_CACHE_MAX) {
+      const oldest = entraTokenCache.keys().next().value;
+      if (oldest === undefined) break;
+      entraTokenCache.delete(oldest);
+    }
+  }
+  entraTokenCache.set(token, { user, expiresAt: now + 5 * 60 * 1000 });
+}
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-  // Always disable caching for API responses per Section 3.2
+  // Authenticated API responses are never cached (Section 3.2); media routes override per response.
   res.setHeader('Cache-Control', 'no-store');
 
   let user: AuthenticatedUser | undefined;
@@ -65,6 +82,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     if (cached && cached.expiresAt > Date.now()) {
       user = cached.user;
     } else {
+      if (cached) entraTokenCache.delete(token);
       const claims = await verifyEntraIdToken(token);
       if (claims) {
         const email = claims.email || claims.preferred_username;
@@ -102,7 +120,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
             user = { ...staff, userType: 'Staff' };
           }
 
-          entraTokenCache.set(token, { user, expiresAt: Date.now() + 5 * 60 * 1000 });
+          cacheEntraToken(token, user);
         }
       }
     }

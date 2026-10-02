@@ -6,6 +6,7 @@ export const publicRouter = Router();
 
 // GET /api/branding & /branding
 publicRouter.get(['/api/branding', '/branding'], async (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache');
   try {
     const branding = await repository.getBranding();
     res.json({ branding });
@@ -16,6 +17,7 @@ publicRouter.get(['/api/branding', '/branding'], async (_req: Request, res: Resp
 
 // GET /api/home-content & /home-content
 publicRouter.get(['/api/home-content', '/home-content'], async (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache');
   try {
     const content = await repository.getHomeContent();
     res.json({ content });
@@ -26,6 +28,7 @@ publicRouter.get(['/api/home-content', '/home-content'], async (_req: Request, r
 
 // GET /api/login-content & /login-content
 publicRouter.get(['/api/login-content', '/login-content'], async (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache');
   try {
     const content = await repository.getLoginContent();
     res.json({ content });
