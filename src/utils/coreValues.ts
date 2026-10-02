@@ -1,4 +1,5 @@
 import { CoreValue } from '../types';
+import { DEFAULT_CORE_VALUES } from '../../shared/defaults';
 
 export const MAX_CORE_VALUES = 6;
 export const MAX_ICON_TEXT_LENGTH = 4;
@@ -6,9 +7,7 @@ export const MAX_ICON_TEXT_LENGTH = 4;
 export const CORE_VALUE_ICON_PX = 64;
 export const DEFAULT_CORE_VALUE_ICON = '◆';
 
-export const DEFAULT_CORE_VALUES: CoreValue[] = [
-  'Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity',
-].map(text => ({ text, icon: null }));
+export { DEFAULT_CORE_VALUES };
 
 export const isImageIcon = (icon?: string | null): icon is string =>
   !!icon && /^data:image\/(png|jpeg|webp|gif);base64,/.test(icon);

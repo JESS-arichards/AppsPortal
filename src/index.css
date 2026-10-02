@@ -184,6 +184,22 @@ a {
   to { transform: rotate(360deg); }
 }
 
+/* In-page loader shown while a lazily loaded page chunk downloads */
+.page-loading {
+  min-height: 40vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: var(--color-main);
+}
+
+.page-loading .spinner {
+  border-color: rgba(0, 0, 0, 0.1);
+  border-top-color: var(--color-main);
+}
+
 /* Impersonation Banner */
 .impersonation-banner {
   background: #FFF7ED;
@@ -3211,6 +3227,19 @@ a {
   padding: 0;
   margin: 0 0 1.25rem;
   min-width: 0;
+}
+
+.login-text-group {
+  border: 0;
+  border-top: 1px solid var(--color-border, #E2E8F0);
+  padding: 1rem 0 0;
+  margin: 0 0 1.25rem;
+  min-width: 0;
+}
+
+.login-text-group > legend {
+  font-weight: 600;
+  padding-right: 0.5rem;
 }
 
 .core-values-editor-list {

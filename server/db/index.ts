@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import sql from 'mssql';
 import { config } from '../config.js';
 import * as Types from './types.js';
+import { DEFAULT_BRANDING, DEFAULT_HOME_CONTENT, DEFAULT_LOGIN_CONTENT } from '../../shared/defaults.js';
 
 let pool: sql.ConnectionPool | null = null;
 let isConnected = false;
@@ -24,54 +25,11 @@ export class MemoryStore {
   pendingParentLinks: Map<number, Types.PendingParentLink> = new Map();
   impersonationAudit: Types.ImpersonationAudit[] = [];
 
-  branding: Types.PortalBranding = {
-    id: 1,
-    mainColor: '#002B49',
-    accentColor: '#BA9B37',
-    textColor: '#212529',
-    navBgColor: null,
-    navTextColor: null,
-    heroBgColor: null,
-    heroTextColor: null,
-    navLogo: null,
-    favicon: null,
-    updatedAt: new Date().toISOString(),
-  };
+  branding: Types.PortalBranding = { ...DEFAULT_BRANDING, updatedAt: new Date().toISOString() };
 
-  homeContent: Types.PortalHomeContent = {
-    id: 1,
-    heroLabel: 'Welcome to JESS Dubai',
-    heroHeadline: 'Excellence, Empowerment and Purpose',
-    heroIntro: 'Empowering our community through innovative digital education and streamlined school services.',
-    heroImage: null,
-    heroImageAlt: 'JESS Dubai Campus',
-    captionName: 'JESS Leadership Team',
-    captionRole: 'Executive Office',
-    welcomeLabel: 'Our Community',
-    welcomeHeading: 'Welcome to the JESS Enterprise Portal',
-    welcomeMessage: 'Welcome to the JESS Dubai Enterprise Portal.\n\nThis unified platform provides staff, students, and parents with secure, direct access to essential services including distance learning schedules, staff parking management, attendance tracking, and live school event streaming.\n\nPlease use the navigation menu above to access your authorised services.',
-    updatedAt: new Date().toISOString(),
-  };
+  homeContent: Types.PortalHomeContent = { ...DEFAULT_HOME_CONTENT, updatedAt: new Date().toISOString() };
 
-  loginContent: Types.PortalLoginContent = {
-    id: 1,
-    welcomeHeadline: 'Welcome to the School Community Portal',
-    valuesJson: JSON.stringify(['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity'].map(text => ({ text, icon: null }))),
-    signInHeading: 'Sign in to JESS Portal',
-    signInIntro: 'Choose your login method below to access school services.',
-    staffChoiceTitle: 'Staff & Students',
-    staffChoiceDescription: 'Sign in with your official school Microsoft account.',
-    parentChoiceTitle: 'Parents & Guardians',
-    parentChoiceDescription: 'Access your parent account using a secure one-time verification code.',
-    parentEmailLabel: 'Registered Parent Email Address',
-    parentCodeLabel: '6-Digit One-Time Verification Code',
-    sendCodeLabel: 'Send Verification Code',
-    verifyCodeLabel: 'Verify and Continue',
-    resendCodeLabel: 'Resend Code',
-    helpPrompt: 'Need assistance accessing your account?',
-    helpLinkText: 'Contact JESS IT Helpdesk',
-    updatedAt: new Date().toISOString(),
-  };
+  loginContent: Types.PortalLoginContent = { ...DEFAULT_LOGIN_CONTENT, updatedAt: new Date().toISOString() };
 
   nextPeriodId = 1;
   nextParkingId = 1;

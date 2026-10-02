@@ -46,4 +46,23 @@ describe('request pipeline', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-cache');
   });
+
+  it('login content PUT only changes the fields provided', async () => {
+    const before = (await (await fetch(`${baseUrl}/api/login-content`)).json()).content;
+    const res = await fetch(`${baseUrl}/api/admin/login-content`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', 'x-user-id': 'staff-admin-1' },
+      body: JSON.stringify({ sendCodeLabel: 'Email me a code' }),
+    });
+    expect(res.status).toBe(200);
+    const after = (await res.json()).content;
+    expect(after.sendCodeLabel).toBe('Email me a code');
+    expect(after.helpLinkText).toBe(before.helpLinkText);
+    expect(after.valuesJson).toBe(before.valuesJson);
+    await fetch(`${baseUrl}/api/admin/login-content`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', 'x-user-id': 'staff-admin-1' },
+      body: JSON.stringify({ sendCodeLabel: before.sendCodeLabel }),
+    });
+  });
 });

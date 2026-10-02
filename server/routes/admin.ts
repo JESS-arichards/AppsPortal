@@ -751,25 +751,33 @@ adminRouter.put('/home-content', requireAdmin('branding'), async (req: Request, 
 });
 
 // PUT /api/admin/login-content
+const LOGIN_TEXT_LIMITS: Record<string, number> = {
+  welcomeHeadline: 200,
+  signInHeading: 200,
+  signInIntro: 1000,
+  staffChoiceTitle: 150,
+  staffChoiceDescription: 500,
+  parentChoiceTitle: 150,
+  parentChoiceDescription: 500,
+  parentEmailLabel: 100,
+  parentCodeLabel: 100,
+  sendCodeLabel: 100,
+  verifyCodeLabel: 100,
+  resendCodeLabel: 100,
+  helpPrompt: 250,
+  helpLinkText: 100,
+};
+
 adminRouter.put('/login-content', requireAdmin('branding'), async (req: Request, res: Response) => {
   try {
-    const {
-      welcomeHeadline,
-      values,
-      signInHeading,
-      signInIntro,
-      staffChoiceTitle,
-      staffChoiceDescription,
-      parentChoiceTitle,
-      parentChoiceDescription,
-      parentEmailLabel,
-      parentCodeLabel,
-      sendCodeLabel,
-      verifyCodeLabel,
-      resendCodeLabel,
-      helpPrompt,
-      helpLinkText,
-    } = req.body;
+    const { values } = req.body;
+
+    // Only fields present in the request are updated; omitted fields keep their stored text.
+    const textUpdates: Record<string, string> = {};
+    for (const [field, maxLength] of Object.entries(LOGIN_TEXT_LIMITS)) {
+      const value = req.body[field];
+      if (typeof value === 'string') textUpdates[field] = value.substring(0, maxLength);
+    }
 
     const MAX_ICON_IMAGE_CHARS = 150_000; // ~110 KB; client normalises uploads to 64x64 PNG
     const sanitizeIcon = (icon: unknown): string | null => {
@@ -782,7 +790,7 @@ adminRouter.put('/login-content', requireAdmin('branding'), async (req: Request,
       return Array.from(icon.trim()).slice(0, 4).join('');
     };
 
-    let valuesJson = '[]';
+    let valuesJson: string | undefined;
     if (Array.isArray(values)) {
       valuesJson = JSON.stringify(
         values
@@ -797,21 +805,8 @@ adminRouter.put('/login-content', requireAdmin('branding'), async (req: Request,
     }
 
     const updated = await repository.updateLoginContent({
-      welcomeHeadline: (welcomeHeadline || '').substring(0, 200),
-      valuesJson,
-      signInHeading: (signInHeading || '').substring(0, 200),
-      signInIntro: (signInIntro || '').substring(0, 1000),
-      staffChoiceTitle: (staffChoiceTitle || '').substring(0, 150),
-      staffChoiceDescription: (staffChoiceDescription || '').substring(0, 500),
-      parentChoiceTitle: (parentChoiceTitle || '').substring(0, 150),
-      parentChoiceDescription: (parentChoiceDescription || '').substring(0, 500),
-      parentEmailLabel: (parentEmailLabel || '').substring(0, 100),
-      parentCodeLabel: (parentCodeLabel || '').substring(0, 100),
-      sendCodeLabel: (sendCodeLabel || '').substring(0, 100),
-      verifyCodeLabel: (verifyCodeLabel || '').substring(0, 100),
-      resendCodeLabel: (resendCodeLabel || '').substring(0, 100),
-      helpPrompt: (helpPrompt || '').substring(0, 250),
-      helpLinkText: (helpLinkText || '').substring(0, 100),
+      ...textUpdates,
+      ...(valuesJson !== undefined ? { valuesJson } : {}),
     });
 
     res.json({ content: updated });

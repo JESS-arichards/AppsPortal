@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Branding } from '../types';
 import { api } from '../services/api';
+import { DEFAULT_BRANDING } from '../../shared/defaults';
 
 interface BrandingContextType {
   branding: Branding;
@@ -8,18 +9,7 @@ interface BrandingContextType {
   refreshBranding: () => Promise<void>;
 }
 
-const defaultBranding: Branding = {
-  id: 1,
-  mainColor: '#002B49',
-  accentColor: '#BA9B37',
-  textColor: '#212529',
-  navBgColor: null,
-  navTextColor: null,
-  heroBgColor: null,
-  heroTextColor: null,
-  navLogo: null,
-  favicon: null,
-};
+const defaultBranding: Branding = DEFAULT_BRANDING;
 
 const BrandingContext = createContext<BrandingContextType>({
   branding: defaultBranding,

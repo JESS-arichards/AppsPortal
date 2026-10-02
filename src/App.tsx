@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BrandingProvider } from './context/BrandingContext';
@@ -7,12 +7,21 @@ import { Footer } from './components/Footer';
 import { ImpersonationBanner } from './components/ImpersonationBanner';
 import { SignInPage } from './pages/SignInPage';
 import { HomePage } from './pages/HomePage';
-import { ProfilePage } from './pages/ProfilePage';
-import { ParkingPage } from './pages/ParkingPage';
-import { AbsencePage } from './pages/AbsencePage';
-import { DistanceLearningPage } from './pages/DistanceLearningPage';
-import { StreamingPage } from './pages/StreamingPage';
-import { AdminPage } from './pages/AdminPage';
+
+// Feature pages are split into separate chunks so the sign-in and home pages load quickly.
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const ParkingPage = lazy(() => import('./pages/ParkingPage').then(m => ({ default: m.ParkingPage })));
+const AbsencePage = lazy(() => import('./pages/AbsencePage').then(m => ({ default: m.AbsencePage })));
+const DistanceLearningPage = lazy(() => import('./pages/DistanceLearningPage').then(m => ({ default: m.DistanceLearningPage })));
+const StreamingPage = lazy(() => import('./pages/StreamingPage').then(m => ({ default: m.StreamingPage })));
+const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+
+const PageLoading: React.FC = () => (
+  <div className="page-loading" role="status">
+    <div className="spinner" />
+    <p>Loading...</p>
+  </div>
+);
 
 const ProtectedLayout: React.FC = () => {
   const { user, loading } = useAuth();
@@ -35,7 +44,9 @@ const ProtectedLayout: React.FC = () => {
       <ImpersonationBanner />
       <Header />
       <main className="portal-main-content">
-        <Outlet />
+        <Suspense fallback={<PageLoading />}>
+          <Outlet />
+        </Suspense>
       </main>
       <Footer />
     </div>

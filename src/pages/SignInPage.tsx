@@ -7,30 +7,14 @@ import { CoreValue, LoginContent } from '../types';
 import { ModalPortal } from '../components/ModalPortal';
 import { CoreValueIcon } from '../components/CoreValueIcon';
 import { parseCoreValues } from '../utils/coreValues';
+import { DEFAULT_LOGIN_CONTENT } from '../../shared/defaults';
 
 export const SignInPage: React.FC = () => {
   const { user, loginWithEntra, verifyParentCode, devLoginAs } = useAuth();
   const { branding } = useBranding();
   const navigate = useNavigate();
 
-  const [content, setContent] = useState<LoginContent>({
-    id: 1,
-    welcomeHeadline: 'Welcome to the School Community Portal',
-    valuesJson: JSON.stringify(['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity']),
-    signInHeading: 'Sign in to JESS Portal',
-    signInIntro: 'Choose your login method below to access school services.',
-    staffChoiceTitle: 'Staff & Students',
-    staffChoiceDescription: 'Sign in with your official school Microsoft account.',
-    parentChoiceTitle: 'Parents & Guardians',
-    parentChoiceDescription: 'Access your parent account using a secure one-time verification code.',
-    parentEmailLabel: 'Registered Parent Email Address',
-    parentCodeLabel: '6-Digit One-Time Verification Code',
-    sendCodeLabel: 'Send Verification Code',
-    verifyCodeLabel: 'Verify and Continue',
-    resendCodeLabel: 'Resend Code',
-    helpPrompt: 'Need assistance accessing your account?',
-    helpLinkText: 'Contact JESS IT Helpdesk',
-  });
+  const [content, setContent] = useState<LoginContent>(DEFAULT_LOGIN_CONTENT);
 
   const [parentFormExpanded, setParentFormExpanded] = useState(false);
   const [parentEmail, setParentEmail] = useState('');

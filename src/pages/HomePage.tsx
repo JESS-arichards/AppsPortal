@@ -2,21 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { HomeContent } from '../types';
 import { LiveRegion } from '../components/LiveRegion';
+import { DEFAULT_HOME_CONTENT } from '../../shared/defaults';
 
 export const HomePage: React.FC = () => {
-  const [content, setContent] = useState<HomeContent>({
-    id: 1,
-    heroLabel: 'Welcome to JESS Dubai',
-    heroHeadline: 'Excellence, Empowerment and Purpose',
-    heroIntro: 'Empowering our community through innovative digital education and streamlined school services.',
-    heroImage: null,
-    heroImageAlt: 'JESS Dubai Campus',
-    captionName: 'JESS Leadership Team',
-    captionRole: 'Executive Office',
-    welcomeLabel: 'Our Community',
-    welcomeHeading: 'Welcome to the JESS Enterprise Portal',
-    welcomeMessage: 'Welcome to the JESS Dubai Enterprise Portal.\n\nThis unified platform provides staff, students, and parents with secure, direct access to essential services including distance learning schedules, staff parking management, attendance tracking, and live school event streaming.\n\nPlease use the navigation menu above to access your authorised services.',
-  });
+  const [content, setContent] = useState<HomeContent>(DEFAULT_HOME_CONTENT);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
