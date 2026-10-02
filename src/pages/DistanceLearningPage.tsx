@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { ClassEntity, LessonPeriod, DistanceLesson, DistanceLessonResource } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LiveRegion } from '../components/LiveRegion';
+import { ModalPortal } from '../components/ModalPortal';
 
 interface DayScheduleItem {
   period: LessonPeriod;
@@ -330,6 +331,7 @@ export const DistanceLearningPage: React.FC = () => {
 
       {/* Lesson Edit Modal */}
       {modalOpen && currentPeriod && (
+        <ModalPortal>
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="lesson-modal-title">
           <div className="modal-content modal-lg">
             <div className="modal-header">
@@ -476,6 +478,7 @@ export const DistanceLearningPage: React.FC = () => {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

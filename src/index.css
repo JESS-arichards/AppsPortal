@@ -26,12 +26,41 @@
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  /* Shared horizontal page gutter / max content width so every glass
+     container lines up and is centred with a small buffer on mobile. */
+  --page-gutter: 1.5rem;
+  --page-max-width: 1200px;
+  --modal-pad: 2rem;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --page-gutter: 0.75rem;
+    --modal-pad: 1.25rem;
+  }
 }
 
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Background page scroll is locked while a dialog is open (see ModalPortal) */
+html.modal-open,
+html.modal-open body {
+  overflow: hidden;
+}
+
+img,
+video,
+iframe {
+  max-width: 100%;
 }
 
 body {
@@ -69,14 +98,18 @@ a {
 .portal-app-layout {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  /* Prevent any stray wide element from enabling sideways panning, which
+     makes vertical touch scrolling feel "stuck". clip (unlike hidden) does
+     not create a scroll container, so sticky elements keep working. */
+  overflow-x: clip;
   background:
     radial-gradient(1100px 760px at 12% -5%, rgba(197, 160, 89, 0.16), transparent 60%),
     radial-gradient(900px 700px at 100% 0%, rgba(11, 34, 64, 0.1), transparent 65%),
     radial-gradient(800px 650px at 0% 100%, rgba(15, 76, 129, 0.08), transparent 60%),
     var(--bg-page);
-  background-attachment: fixed;
 }
 
 /* Ambient glass "fluid" glow spheres - sitewide, viewport-fixed, decorative only */
@@ -117,12 +150,13 @@ a {
 
 .portal-main-content {
   flex: 1;
+  min-width: 0;
 }
 
 .portal-container {
-  max-width: 1200px;
+  max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  padding: 2rem var(--page-gutter);
 }
 
 /* App Loading Screen */
@@ -433,7 +467,7 @@ a {
 
 .quick-links-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
   gap: 1.25rem;
 }
 
@@ -588,6 +622,8 @@ a {
 
 .form-control {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   border: 1px solid var(--border-color);
@@ -705,19 +741,8 @@ a {
   color: #1D4ED8;
 }
 
-/* Modals */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
+/* Modals - see the consolidated "Generic Modal Backdrop & Dialog" rules
+   further down for the backdrop / content container. */
 .modal-dialog {
   background: #ffffff;
   border-radius: var(--radius-lg);
@@ -749,6 +774,18 @@ a {
   font-size: 1.25rem;
   color: var(--text-muted);
   cursor: pointer;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+}
+
+.modal-close:hover {
+  background: #F1F5F9;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -804,7 +841,7 @@ a {
   backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
   color: #94A3B8;
-  padding: 2.5rem 1.5rem 1.5rem;
+  padding: 2.5rem var(--page-gutter) 1.5rem;
   font-size: 0.8125rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -860,21 +897,22 @@ a {
 
 .signin-page-layout {
   min-height: 100vh;
+  min-height: 100dvh;
   position: relative;
-  overflow-x: hidden;
+  overflow-x: clip;
   display: flex;
   flex-direction: column;
   background:
     radial-gradient(1200px 800px at 15% 10%, rgba(186, 155, 55, 0.16), transparent 60%),
     radial-gradient(1000px 700px at 85% 90%, rgba(11, 34, 64, 0.95), transparent 70%),
     linear-gradient(135deg, var(--color-main, #002B49) 0%, #061527 50%, #030a14 100%);
-  background-attachment: fixed;
   color: #F8FAFC;
 }
 
-/* Dynamic Ambient Glass Glow Spheres */
+/* Dynamic Ambient Glass Glow Spheres (viewport-fixed so they never extend
+   the scrollable page area) */
 .glass-ambient-sphere {
-  position: absolute;
+  position: fixed;
   border-radius: 50%;
   pointer-events: none;
   filter: blur(90px);
@@ -933,7 +971,7 @@ a {
 .signin-top-bar-inner {
   max-width: 1240px;
   margin: 0 auto;
-  padding: 0.85rem 1.5rem;
+  padding: 0.85rem var(--page-gutter);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -995,14 +1033,19 @@ a {
 .signin-main-container {
   position: relative;
   z-index: 10;
+  width: 100%;
   max-width: 1240px;
   margin: 3rem auto 2.5rem;
-  padding: 0 1.5rem;
+  padding: 0 var(--page-gutter);
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 3.5rem;
   align-items: center;
   flex: 1;
+}
+
+.signin-actions-section {
+  min-width: 0;
 }
 
 .glass-panel {
@@ -1078,9 +1121,31 @@ a {
 }
 
 .value-bullet {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--value-icon-size, 1.25rem);
+  height: var(--value-icon-size, 1.25rem);
   font-size: 0.85rem;
+  line-height: 1;
   color: var(--color-accent, #BA9B37);
   text-shadow: 0 0 8px rgba(186, 155, 55, 0.6);
+  overflow: hidden;
+}
+
+/* Custom emoji/symbol icons: scaled to fill the same fixed slot */
+.value-bullet-custom {
+  font-size: calc(var(--value-icon-size, 1.25rem) * 0.85);
+  text-shadow: none;
+}
+
+/* Uploaded image icons always fit (contain) the fixed slot */
+.value-bullet-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .value-label {
@@ -1425,7 +1490,11 @@ a {
   border-color: var(--color-main, #002B49);
 }
 
-/* Generic Modal Backdrop & Dialog */
+/* Generic Modal Backdrop & Dialog
+   The backdrop itself is the scroll container: short dialogs are centred
+   (margin: auto), tall dialogs start at the top and the whole dialog scrolls
+   smoothly on touch devices. overscroll-behavior stops scroll chaining to
+   the (locked) page behind. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1433,10 +1502,14 @@ a {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  z-index: 1000;
-  padding: 1.5rem;
+  z-index: 2000;
+  padding: var(--page-gutter);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   animation: modalFadeIn 0.25s ease-out;
 }
 
@@ -1448,11 +1521,39 @@ a {
 .modal-content {
   background: #FFFFFF;
   border-radius: 20px;
-  padding: 2rem;
+  padding: var(--modal-pad);
   max-width: 500px;
   width: 100%;
+  min-width: 0;
+  margin: auto 0;
+  flex-shrink: 0;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+}
+
+/* Header stays pinned to the top of the viewport while a long dialog is
+   scrolled, so the close button is always reachable on mobile. */
+.modal-content .modal-header {
+  position: sticky;
+  /* Sticky offsets are measured from the backdrop's content edge (inside its
+     gutter padding); this pins the header flush with the viewport top while
+     leaving 0.75rem of its own padding above the title. */
+  top: calc(0.75rem - var(--modal-pad) - var(--page-gutter));
+  z-index: 2;
+  margin: calc(-1 * var(--modal-pad)) calc(-1 * var(--modal-pad)) 1.25rem;
+  padding: var(--modal-pad) var(--modal-pad) 0.85rem;
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 20px 20px 0 0;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.modal-content .modal-header .modal-title {
+  margin-bottom: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .modal-title {
@@ -1472,6 +1573,7 @@ a {
 .modal-actions {
   margin-top: 1.5rem;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.75rem;
 }
@@ -1479,7 +1581,7 @@ a {
 /* Responsive Breakdown for Sign-in Page */
 @media (max-width: 960px) {
   .signin-main-container {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
     margin-top: 2rem;
   }
@@ -1497,6 +1599,36 @@ a {
   }
 }
 
+@media (max-width: 640px) {
+  .signin-main-container {
+    gap: 1rem;
+    margin: 1rem auto 1.5rem;
+  }
+  .welcome-headline {
+    font-size: 1.65rem;
+  }
+  .signin-welcome-section,
+  .signin-card {
+    padding: 1.25rem;
+    border-radius: 18px;
+  }
+  .signin-welcome-section {
+    gap: 1rem;
+  }
+  .card-heading {
+    font-size: 1.4rem;
+  }
+  .auth-choice-box {
+    padding: 1rem;
+  }
+  .form-actions-row {
+    flex-wrap: wrap;
+  }
+  .form-actions-row .btn {
+    flex: 1 1 auto;
+  }
+}
+
 /* ==========================================================================
    Authenticated Portal Shell - Header / Nav / Footer (matches Header.tsx &
    Footer.tsx markup) + sitewide glass design system + generic page shell
@@ -1506,9 +1638,9 @@ a {
 
 /* --- Header layout (actual markup) --- */
 .header-container {
-  max-width: 1200px;
+  max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem var(--page-gutter);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1597,24 +1729,50 @@ a {
 /* Mobile nav collapse - the navigation is a horizontal bar on desktop and
    collapses into a dropdown list under the header on small screens. */
 @media (max-width: 860px) {
+  .header-container {
+    gap: 0.75rem;
+  }
+  .brand-link {
+    margin-right: auto;
+    min-width: 0;
+  }
+  .brand-logo {
+    max-width: 42vw;
+    height: 38px;
+  }
   .mobile-menu-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    order: 2;
+    order: 3;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
   }
   .user-controls {
-    order: 3;
+    order: 2;
+    min-width: 0;
+    gap: 0.5rem;
+  }
+  .user-info {
+    min-width: 0;
+  }
+  .user-info .user-name {
+    max-width: 30vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .portal-nav {
     order: 4;
     flex-basis: 100%;
     max-height: 0;
     overflow: hidden;
+    border-top-color: transparent;
     transition: max-height 0.25s ease;
   }
   .portal-nav.mobile-open {
     max-height: 600px;
+    border-top-color: rgba(255, 255, 255, 0.1);
   }
   .nav-list {
     flex-direction: column;
@@ -1631,9 +1789,15 @@ a {
   }
 }
 
+@media (max-width: 560px) {
+  .user-info {
+    display: none;
+  }
+}
+
 /* --- Footer layout (actual markup) --- */
 .footer-container {
-  max-width: 1200px;
+  max-width: var(--page-max-width);
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -1705,7 +1869,7 @@ a {
 .portal-hero-section {
   position: relative;
   overflow: hidden;
-  padding: 3.5rem 1.5rem;
+  padding: 3.5rem var(--page-gutter);
 }
 
 .portal-hero-section::before {
@@ -1723,10 +1887,10 @@ a {
 .hero-content-wrapper {
   position: relative;
   z-index: 1;
-  max-width: 1200px;
+  max-width: var(--page-max-width);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 2.5rem;
   align-items: center;
 }
@@ -1790,11 +1954,11 @@ a {
 }
 
 .portal-welcome-section {
-  padding: 3rem 1.5rem 4rem;
+  padding: 3rem var(--page-gutter) 4rem;
 }
 
 .welcome-inner {
-  max-width: 900px;
+  max-width: var(--page-max-width);
   margin: 0 auto;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px) saturate(160%);
@@ -1833,30 +1997,69 @@ a {
 
 @media (max-width: 860px) {
   .hero-content-wrapper {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
   }
   .hero-image-block {
     order: -1;
   }
 }
 
+@media (max-width: 640px) {
+  .portal-hero-section {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+  }
+  .hero-headline {
+    font-size: 1.7rem;
+  }
+  .portal-welcome-section {
+    padding-top: 1.25rem;
+    padding-bottom: 2rem;
+  }
+  .welcome-inner {
+    padding: 1.25rem;
+  }
+  .welcome-heading {
+    font-size: 1.3rem;
+  }
+}
+
 /* --- Generic page shell (used on Admin/Parking/Absence/Profile/Streaming/
-   DistanceLearning pages) --- */
-.page-header {
-  max-width: 1200px;
+   DistanceLearning pages) ---
+   Each page container is a single centred column of max --page-max-width
+   with a --page-gutter buffer either side. Everything inside (headers,
+   status boxes, glass cards, grids) simply fills that column, so all glass
+   containers share the same width and are centred on every screen size. */
+.admin-page-container,
+.parking-page-container,
+.profile-page-container,
+.streaming-page-container,
+.absence-page-container,
+.distance-learning-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: calc(var(--page-max-width) + 2 * var(--page-gutter));
   margin: 0 auto;
-  padding: 2rem 1.5rem 1rem;
+  padding: 0 var(--page-gutter) 2rem;
+}
+
+.page-header {
+  padding: 2rem 0 1rem;
 }
 
 .page-header-flex {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.page-header > .page-header-flex {
+  padding: 0;
 }
 
 .page-title {
@@ -1881,15 +2084,19 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
-  margin: 0 auto 1.5rem;
-  max-width: 1200px;
+  margin: 0 0 1.5rem;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   box-shadow: 0 20px 45px -20px rgba(0, 15, 35, 0.3);
   color: var(--text-primary);
 }
 
-.portal-main-content > .card,
-.portal-main-content > div > .card {
-  width: calc(100% - 3rem);
+/* Cards laid out by a grid use the grid gap for spacing instead */
+.profile-grid > .card,
+.video-cards-grid > .card,
+.schedule-cards-grid > .card {
+  margin: 0;
 }
 
 .card-section-title {
@@ -2110,6 +2317,7 @@ a {
 .date-filter-box {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -2128,9 +2336,7 @@ a {
 /* Tabs (admin console) */
 .admin-tab-nav {
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
+  min-width: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -2140,6 +2346,8 @@ a {
   gap: 0.4rem;
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
   border-bottom: 2px solid rgba(255, 255, 255, 0.4);
   padding-bottom: 0;
 }
@@ -2170,9 +2378,8 @@ a {
 
 .admin-tab-content {
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1.5rem;
+  min-width: 0;
+  padding: 1.5rem 0 0;
   box-sizing: border-box;
 }
 
@@ -2220,14 +2427,14 @@ a {
 
 .admin-grid-two-cols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
 }
 
 @media (max-width: 900px) {
   .admin-grid-two-cols {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -2416,9 +2623,8 @@ a {
 }
 
 .streaming-section {
-  margin: 2rem auto;
-  max-width: 1200px;
-  padding: 0 1.5rem;
+  margin: 1rem 0 2rem;
+  min-width: 0;
 }
 
 .section-title-wrap {
@@ -2449,7 +2655,7 @@ a {
 
 .video-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
   gap: 1.25rem;
 }
 
@@ -2557,12 +2763,9 @@ a {
 
 .schedule-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 360px));
-  justify-content: center;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: 1.25rem;
-  max-width: 1200px;
-  margin: 0.5rem auto 0;
-  padding: 0 1.5rem;
+  margin: 0.5rem 0 1.5rem;
 }
 
 .period-card.card {
@@ -2693,20 +2896,22 @@ a {
 
 .modal-right-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
 /* --- Profile page --- */
 .profile-grid {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
+  margin-bottom: 1.5rem;
 }
 
 @media (max-width: 860px) {
   .profile-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -2760,6 +2965,27 @@ a {
   font-size: 0.9rem;
 }
 
+.detail-row dd {
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .detail-row {
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .detail-row dt {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+  }
+  .detail-row dd {
+    text-align: left;
+  }
+}
+
 .detail-row:last-child {
   border-bottom: none;
   padding-bottom: 0;
@@ -2781,22 +3007,7 @@ a {
 }
 
 /* --- Absence page --- */
-.absence-form-card {
-  max-width: 700px;
-}
-
 .absence-form {
-  display: flex;
-  flex-direction: column;
-}
-
-/* --- Remaining page-container wrappers: generic max-width shell --- */
-.admin-page-container,
-.parking-page-container,
-.profile-page-container,
-.streaming-page-container,
-.absence-page-container,
-.distance-learning-container {
   display: flex;
   flex-direction: column;
 }
@@ -2845,4 +3056,223 @@ a {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+/* ==========================================================================
+   Mobile / touch responsiveness & scroll performance
+   ========================================================================== */
+
+.table-responsive {
+  overscroll-behavior-x: contain;
+}
+
+/* Fixed backgrounds force a full repaint on every scroll frame on mobile
+   browsers (and are ignored by iOS Safari), so only use them on desktop. */
+@media (hover: hover) and (pointer: fine) and (min-width: 861px) {
+  .portal-app-layout,
+  .signin-page-layout {
+    background-attachment: fixed;
+  }
+}
+
+/* Large animated blur filters and stacked backdrop-filters are the main
+   cause of janky / "sticking" touch scrolling on phones and tablets. The
+   glow layers are already soft radial gradients, so they keep their look
+   without the per-frame blur; glass cards get a slightly more opaque fill
+   instead of a live backdrop blur. */
+@media (max-width: 860px), (pointer: coarse) {
+  .portal-app-layout::before,
+  .portal-app-layout::after,
+  .glass-ambient-sphere {
+    animation: none;
+    filter: none;
+  }
+  .portal-hero-section::before {
+    filter: none;
+  }
+  .portal-main-content .card,
+  .welcome-inner,
+  .value-item,
+  .school-external-link,
+  .portal-nav,
+  .portal-footer {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .portal-main-content .card {
+    background: rgba(255, 255, 255, 0.97);
+  }
+  .welcome-inner {
+    background: rgba(255, 255, 255, 0.95);
+  }
+  .signin-welcome-section,
+  .signin-card,
+  .portal-header,
+  .modal-backdrop {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
+
+/* iOS Safari zooms the page when focusing inputs under 16px and does not
+   zoom back out, leaving the page wider than the screen. */
+@media (max-width: 860px), (pointer: coarse) {
+  .form-control,
+  .form-control-sm,
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  .code-input {
+    font-size: 1.35rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-header {
+    padding: 1.25rem 0 0.75rem;
+  }
+  .page-title {
+    font-size: 1.4rem;
+  }
+  .portal-main-content .card {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  .profile-grid,
+  .video-cards-grid,
+  .schedule-cards-grid,
+  .admin-users-tab,
+  .admin-classes-tab,
+  .admin-periods-tab,
+  .admin-parent-links-tab,
+  .admin-parking-tab,
+  .admin-streaming-tab,
+  .admin-branding-tab,
+  .admin-stacked-sections {
+    gap: 1rem;
+  }
+  .admin-tab-content {
+    padding-top: 1rem;
+  }
+  .portal-table th,
+  .portal-table td {
+    padding: 0.6rem 0.65rem;
+  }
+  .modal-content {
+    border-radius: 16px;
+  }
+  .modal-content .modal-header {
+    border-radius: 16px 16px 0 0;
+  }
+  .modal-title {
+    font-size: 1.15rem;
+  }
+  .modal-actions .btn,
+  .modal-right-actions .btn {
+    flex: 1 1 auto;
+  }
+  .portal-footer {
+    padding-top: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .spinner {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Sign-in core value icons (admin-configurable) — fixed small slot size
+   ---------------------------------------------------------------------------- */
+.values-list {
+  --value-icon-size: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .values-list {
+    --value-icon-size: 1.1rem;
+  }
+}
+
+/* Admin: core values editor */
+.core-values-editor {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  min-width: 0;
+}
+
+.core-values-editor-list {
+  list-style: none;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.core-value-row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 4.5rem auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border, #E2E8F0);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.8);
+}
+
+/* Preview uses the sign-in page's dark glass tile so the icon looks as it will live */
+.core-value-preview {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0B2545, #13315C);
+  --value-icon-size: 1.25rem;
+}
+
+.core-value-symbol {
+  text-align: center;
+}
+
+.core-value-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.core-value-upload {
+  position: relative;
+  cursor: pointer;
+  margin: 0;
+}
+
+.core-value-upload:focus-within {
+  outline: 2px solid var(--color-accent, #BA9B37);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .core-value-row {
+    grid-template-columns: 2.5rem minmax(0, 1fr) 4rem;
+  }
+  .core-value-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
 }

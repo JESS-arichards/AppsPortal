@@ -3,6 +3,7 @@ import Hls from 'hls.js';
 import { api } from '../services/api';
 import { StreamItem } from '../types';
 import { LiveRegion } from '../components/LiveRegion';
+import { ModalPortal } from '../components/ModalPortal';
 
 export const StreamingPage: React.FC = () => {
   const [videos, setVideos] = useState<StreamItem[]>([]);
@@ -205,6 +206,7 @@ export const StreamingPage: React.FC = () => {
 
       {/* Player Modal Dialog */}
       {activeVideo && (
+        <ModalPortal>
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="player-modal-title">
           <div className="modal-content modal-player">
             <div className="modal-header">
@@ -259,6 +261,7 @@ export const StreamingPage: React.FC = () => {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

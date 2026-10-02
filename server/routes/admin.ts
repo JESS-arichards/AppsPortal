@@ -773,9 +773,29 @@ adminRouter.put('/login-content', requireAdmin('branding'), async (req: Request,
       helpLinkText,
     } = req.body;
 
+    const MAX_ICON_IMAGE_CHARS = 150_000; // ~110 KB; client normalises uploads to 64x64 PNG
+    const sanitizeIcon = (icon: unknown): string | null => {
+      if (typeof icon !== 'string' || !icon.trim()) return null;
+      if (icon.startsWith('data:')) {
+        return /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(icon) && icon.length <= MAX_ICON_IMAGE_CHARS
+          ? icon
+          : null;
+      }
+      return Array.from(icon.trim()).slice(0, 4).join('');
+    };
+
     let valuesJson = '[]';
     if (Array.isArray(values)) {
-      valuesJson = JSON.stringify(values.slice(0, 8).map(v => String(v).substring(0, 50)));
+      valuesJson = JSON.stringify(
+        values
+          .slice(0, 6)
+          .map((v: unknown) => {
+            const text = typeof v === 'string' ? v : (v as { text?: unknown })?.text;
+            const icon = typeof v === 'string' ? null : sanitizeIcon((v as { icon?: unknown })?.icon);
+            return { text: String(text ?? '').trim().substring(0, 50), icon };
+          })
+          .filter(v => v.text.length > 0)
+      );
     }
 
     const updated = await repository.updateLoginContent({

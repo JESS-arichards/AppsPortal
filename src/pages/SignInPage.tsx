@@ -3,7 +3,10 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { api, ApiError } from '../services/api';
-import { LoginContent } from '../types';
+import { CoreValue, LoginContent } from '../types';
+import { ModalPortal } from '../components/ModalPortal';
+import { CoreValueIcon } from '../components/CoreValueIcon';
+import { parseCoreValues } from '../utils/coreValues';
 
 export const SignInPage: React.FC = () => {
   const { user, loginWithEntra, verifyParentCode, devLoginAs } = useAuth();
@@ -47,12 +50,7 @@ export const SignInPage: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  let valuesList: string[] = [];
-  try {
-    valuesList = JSON.parse(content.valuesJson);
-  } catch {
-    valuesList = ['Commitment', 'Respect', 'Excellence', 'Care', 'Integrity', 'Curiosity'];
-  }
+  const valuesList: CoreValue[] = parseCoreValues(content.valuesJson);
 
   const handleStaffLogin = async () => {
     setErrorMessage(null);
@@ -152,8 +150,8 @@ export const SignInPage: React.FC = () => {
             <ul className="values-list">
               {valuesList.map((val, idx) => (
                 <li key={idx} className="value-item">
-                  <span className="value-bullet" aria-hidden="true">◆</span>
-                  <span className="value-label">{val}</span>
+                  <CoreValueIcon icon={val.icon} />
+                  <span className="value-label">{val.text}</span>
                 </li>
               ))}
             </ul>
@@ -360,6 +358,7 @@ export const SignInPage: React.FC = () => {
 
       {/* Email Not Found Modal Dialog */}
       {showNotFoundDialog && (
+        <ModalPortal>
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="notfound-title">
           <div className="modal-content glass-panel">
             <h3 id="notfound-title" className="modal-title">Parent Record Not Found</h3>
@@ -383,6 +382,7 @@ export const SignInPage: React.FC = () => {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

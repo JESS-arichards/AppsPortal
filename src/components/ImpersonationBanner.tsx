@@ -21,6 +21,8 @@ export const ImpersonationBanner: React.FC = () => {
         color: isViewMode ? '#92400E' : '#991B1B',
         padding: '8px 16px',
         display: 'flex',
+        flexWrap: 'wrap',
+        gap: '8px 12px',
         alignItems: 'center',
         justifyContent: 'space-between',
         fontSize: '14px',
@@ -28,7 +30,7 @@ export const ImpersonationBanner: React.FC = () => {
         zIndex: 1000,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 260px', minWidth: 0 }}>
         <span style={{ fontSize: '18px' }} aria-hidden="true">
           {isViewMode ? '👁️' : '⚡'}
         </span>

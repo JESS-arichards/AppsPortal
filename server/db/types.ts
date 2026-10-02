@@ -165,7 +165,7 @@ export interface PortalLoginContent {
   id: number;
   welcomeLabel: string;
   welcomeHeadline: string;
-  valuesJson: string; // JSON array
+  valuesJson: string; // JSON array of { text, icon } (legacy rows: string[])
   signInHeading: string;
   signInIntro: string;
   staffChoiceTitle: string;

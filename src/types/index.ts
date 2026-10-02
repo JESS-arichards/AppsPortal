@@ -61,11 +61,17 @@ export interface HomeContent {
   welcomeMessage: string;
 }
 
+export interface CoreValue {
+  text: string;
+  /** null = default diamond; a short emoji/symbol; or a data:image/... URL */
+  icon?: string | null;
+}
+
 export interface LoginContent {
   id: number;
   welcomeLabel: string;
   welcomeHeadline: string;
-  valuesJson: string;
+  valuesJson: string; // JSON array of CoreValue (legacy: string[])
   signInHeading: string;
   signInIntro: string;
   staffChoiceTitle: string;

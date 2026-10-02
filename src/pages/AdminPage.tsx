@@ -3,6 +3,15 @@ import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { api } from '../services/api';
 import { LiveRegion } from '../components/LiveRegion';
+import { ModalPortal } from '../components/ModalPortal';
+import { CoreValueIcon } from '../components/CoreValueIcon';
+import {
+  MAX_CORE_VALUES,
+  MAX_ICON_TEXT_LENGTH,
+  isImageIcon,
+  parseCoreValues,
+  resizeIconImage,
+} from '../utils/coreValues';
 import {
   User,
   ClassEntity,
@@ -13,6 +22,7 @@ import {
   Branding,
   HomeContent,
   LoginContent,
+  CoreValue,
 } from '../types';
 
 type AdminTab = 'users' | 'classes' | 'periods' | 'parentLinks' | 'parking' | 'streaming' | 'branding';
@@ -588,6 +598,7 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
 
       {/* User Editor Modal */}
       {editingUser && (
+        <ModalPortal>
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editor-modal-title">
           <div className="modal-content modal-lg">
             <div className="modal-header">
@@ -805,10 +816,12 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Impersonation Dialog ("View as") */}
       {impersonateUser && (
+        <ModalPortal>
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="imp-dialog-title">
           <div className="modal-content">
             <div className="modal-header">
@@ -874,6 +887,7 @@ const AdminUsersSection: React.FC<{ isFullAdmin: boolean }> = ({ isFullAdmin }) 
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
@@ -1936,6 +1950,7 @@ const AdminStreamingSection: React.FC = () => {
 
       {/* Stream Add / Edit Dialog */}
       {dialogOpen && (
+        <ModalPortal>
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="stream-dialog-title">
           <div className="modal-content modal-lg">
             <div className="modal-header">
@@ -2076,6 +2091,7 @@ const AdminStreamingSection: React.FC = () => {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
@@ -2102,7 +2118,7 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
 
   const [homeData, setHomeData] = useState<HomeContent | null>(null);
   const [loginData, setLoginData] = useState<LoginContent | null>(null);
-  const [valuesArray, setValuesArray] = useState<string[]>([]);
+  const [valuesArray, setValuesArray] = useState<CoreValue[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2121,11 +2137,7 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
       setBrandingData(brandRes.branding);
       setHomeData(homeRes.content);
       setLoginData(loginRes.content);
-      try {
-        setValuesArray(JSON.parse(loginRes.content.valuesJson));
-      } catch {
-        setValuesArray([]);
-      }
+      setValuesArray(parseCoreValues(loginRes.content.valuesJson));
     } catch (err: any) {
       setError(err.message || 'Failed to load branding and content');
     } finally {
@@ -2205,13 +2217,48 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
     setError(null);
     setSuccess(null);
     try {
+      const values = valuesArray
+        .map(v => ({ text: v.text.trim(), icon: v.icon || null }))
+        .filter(v => v.text.length > 0);
       await api.put('/api/admin/login-content', {
         ...loginData,
-        values: valuesArray,
+        values,
       });
       setSuccess('Sign-in page content saved.');
     } catch (err: any) {
       setError(err.message || 'Failed to save sign-in content');
+    }
+  };
+
+  const updateValue = (index: number, patch: Partial<CoreValue>) => {
+    setValuesArray(prev => prev.map((v, i) => (i === index ? { ...v, ...patch } : v)));
+  };
+
+  const moveValue = (index: number, delta: number) => {
+    setValuesArray(prev => {
+      const target = index + delta;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const handleValueIconUpload = async (index: number, file?: File) => {
+    if (!file) return;
+    setError(null);
+    if (!file.type.startsWith('image/')) {
+      setError('Core value icon must be an image file');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Core value icon exceeds 2 MB limit');
+      return;
+    }
+    try {
+      updateValue(index, { icon: await resizeIconImage(file) });
+    } catch (err: any) {
+      setError(err.message || 'Failed to process icon image');
     }
   };
 
@@ -2628,19 +2675,108 @@ const AdminBrandingSection: React.FC<{ refreshBranding: () => Promise<void> }> =
               </div>
             </div>
 
-            {/* Values are displayed in the order entered */}
-            <div className="form-group">
-              <label className="form-label">Sign-In Page Core Values (one per line, display order; up to 6)</label>
-              <textarea
-                rows={6}
-                className="form-control"
-                value={valuesArray.join('\n')}
-                onChange={e => {
-                  const lines = e.target.value.split('\n').filter(l => l.trim().length > 0);
-                  setValuesArray(lines.slice(0, 6));
-                }}
-              />
-            </div>
+            {/* Values are displayed in the order listed */}
+            <fieldset className="form-group core-values-editor">
+              <legend className="form-label">
+                Sign-In Page Core Values (display order; up to {MAX_CORE_VALUES})
+              </legend>
+              <p className="form-hint">
+                Each value shows a small icon. Leave it as the default diamond, type an emoji or symbol, or upload an
+                image (PNG/JPEG/WebP/SVG, max 2 MB) — uploads are automatically scaled to fit the icon size.
+              </p>
+              <ul className="core-values-editor-list">
+                {valuesArray.map((val, idx) => {
+                  const hasImage = isImageIcon(val.icon);
+                  return (
+                    <li key={idx} className="core-value-row">
+                      <div className="core-value-preview" title="Icon preview">
+                        <CoreValueIcon icon={val.icon} />
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={50}
+                        required
+                        className="form-control core-value-text"
+                        aria-label={`Core value ${idx + 1} text`}
+                        placeholder="Value text"
+                        value={val.text}
+                        onChange={e => updateValue(idx, { text: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="form-control core-value-symbol"
+                        aria-label={`Core value ${idx + 1} emoji or symbol icon`}
+                        placeholder="◆"
+                        title="Emoji or symbol (leave blank for the default diamond)"
+                        value={hasImage ? '' : val.icon || ''}
+                        disabled={hasImage}
+                        onChange={e => {
+                          const chars = Array.from(e.target.value).slice(0, MAX_ICON_TEXT_LENGTH).join('');
+                          updateValue(idx, { icon: chars.trim() ? chars : null });
+                        }}
+                      />
+                      <div className="core-value-actions">
+                        <label className="btn btn-sm btn-secondary core-value-upload">
+                          {hasImage ? 'Replace image' : 'Upload image'}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                            className="sr-only"
+                            aria-label={`Upload icon image for core value ${idx + 1}`}
+                            onChange={e => {
+                              handleValueIconUpload(idx, e.target.files?.[0]);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          disabled={!val.icon}
+                          onClick={() => updateValue(idx, { icon: null })}
+                        >
+                          Default icon
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          aria-label={`Move core value ${idx + 1} up`}
+                          disabled={idx === 0}
+                          onClick={() => moveValue(idx, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          aria-label={`Move core value ${idx + 1} down`}
+                          disabled={idx === valuesArray.length - 1}
+                          onClick={() => moveValue(idx, 1)}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger"
+                          aria-label={`Remove core value ${idx + 1}`}
+                          onClick={() => setValuesArray(prev => prev.filter((_, i) => i !== idx))}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                disabled={valuesArray.length >= MAX_CORE_VALUES}
+                onClick={() => setValuesArray(prev => [...prev, { text: '', icon: null }])}
+              >
+                + Add value
+              </button>
+            </fieldset>
 
             <div className="form-row-two">
               <div className="form-group">
